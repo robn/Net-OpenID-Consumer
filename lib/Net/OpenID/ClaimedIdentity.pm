@@ -182,6 +182,7 @@ sub check_url {
             # and it must use the "openid.sreg." prefix.
             next unless $ext_uri eq "http://openid.net/extensions/sreg/1.1";
             $ext_alias = "sreg";
+            $ext_url_args{'openid.ns.sreg'}=$ext_uri;
         }
 
         foreach my $k (keys %{$self->{extension_args}{$ext_uri}}) {
