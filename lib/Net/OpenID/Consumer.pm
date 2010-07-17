@@ -701,7 +701,7 @@ sub verified_identity {
         # and check that the time isn't faked
         my $c_secret = $self->_get_consumer_secret($sig_time);
         my $good_sig = substr(OpenID::util::hmac_sha1_hex($sig_time, $c_secret), 0, 20);
-        return $self->_fail("time_bad_sig") unless $sig eq $good_sig;
+        return $self->_fail("time_bad_sig") unless OpenID::util::timing_indep_eq($sig, $good_sig);
     }
 
     my $last_error = undef;
@@ -813,7 +813,7 @@ sub verified_identity {
         }
 
         my $good_sig = OpenID::util::b64(OpenID::util::hmac_sha1($token, $assoc->secret));
-        return $self->_fail("signature_mismatch") unless $sig64 eq $good_sig;
+        return $self->_fail("signature_mismatch") unless OpenID::util::timing_indep_eq($sig64, $good_sig);
 
     } else {
         $self->_debug("verified_identity: verifying using HTTP (dumb mode)");
