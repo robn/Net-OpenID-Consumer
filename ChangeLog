@@ -1,4 +1,12 @@
-        * Moved some utility bits out to a separate Net::OpenID::Common
+1.10:
+ 
+    * Fix potential timing attack when checking signatures (Adam Sjøgren)
+      (see http://lists.openid.net/pipermail/openid-security/2010-July/001156.html)
+
+	* Set sreg namespace based on what the server is expecting
+      (Adam Sjøgren)
+
+	* Moved some utility bits out to a separate Net::OpenID::Common
 	  package so that Net::OpenID::Server can use it in future
 	  versions.
 

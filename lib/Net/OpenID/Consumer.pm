@@ -9,7 +9,7 @@ use Storable;
 package Net::OpenID::Consumer;
 
 use vars qw($VERSION);
-$VERSION = "1.03";
+$VERSION = "1.10";
 
 use fields (
     'cache',           # a Cache object to store HTTP responses and associations
