@@ -34,7 +34,7 @@ use Net::OpenID::Common; # To get the OpenID::util package
 
 use MIME::Base64 ();
 use Digest::SHA1 ();
-use Crypt::DH 0.05;
+use Crypt::DH::GMP;
 use Time::Local;
 use HTTP::Request;
 
