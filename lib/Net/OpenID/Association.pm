@@ -103,7 +103,7 @@ sub server_assoc {
                 "openid.mode" => "associate",
                 "openid.assoc_type" => "HMAC-SHA1",
                 "openid.session_type" => "DH-SHA1",
-                "openid.dh_consumer_public" => OpenID::util::bi2arg($dh->pub_key),
+                "openid.dh_consumer_public" => OpenID::util::int2arg($dh->pub_key),
                 );
 
     if ($protocol_version == 2) {
@@ -155,9 +155,9 @@ sub server_assoc {
     if ($stype ne "DH-SHA1") {
         $secret = OpenID::util::d64($args{'mac_key'});
     } else {
-        my $server_pub = OpenID::util::arg2bi($args{'dh_server_public'});
+        my $server_pub = OpenID::util::arg2int($args{'dh_server_public'});
         my $dh_sec = $dh->compute_secret($server_pub);
-        $secret = OpenID::util::d64($args{'enc_mac_key'}) ^ sha1(OpenID::util::bi2bytes($dh_sec));
+        $secret = OpenID::util::d64($args{'enc_mac_key'}) ^ sha1(OpenID::util::int2bytes($dh_sec));
     }
     return $dumb->("secret_not_20_bytes") unless length($secret) == 20;
 
