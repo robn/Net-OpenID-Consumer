@@ -30,7 +30,7 @@ use Net::OpenID::URIFetch;
 use Net::OpenID::Common; # To get the OpenID::util package
 
 use MIME::Base64 ();
-use Digest::SHA1 ();
+use Digest::SHA qw(hmac_sha1 hmac_sha1_hex);
 use Time::Local;
 use HTTP::Request;
 
@@ -696,7 +696,7 @@ sub verified_identity {
         return $self->_fail("time_in_future") if $sig_time - 30 > $now;
         # and check that the time isn't faked
         my $c_secret = $self->_get_consumer_secret($sig_time);
-        my $good_sig = substr(OpenID::util::hmac_sha1_hex($sig_time, $c_secret), 0, 20);
+        my $good_sig = substr(hmac_sha1_hex($sig_time, $c_secret), 0, 20);
         return $self->_fail("time_bad_sig") unless OpenID::util::timing_indep_eq($sig, $good_sig);
     }
 
@@ -808,7 +808,7 @@ sub verified_identity {
             $signed_fields{$param} = $val;
         }
 
-        my $good_sig = OpenID::util::b64(OpenID::util::hmac_sha1($token, $assoc->secret));
+        my $good_sig = OpenID::util::b64(hmac_sha1($token, $assoc->secret));
         return $self->_fail("signature_mismatch") unless OpenID::util::timing_indep_eq($sig64, $good_sig);
 
     } else {
