@@ -13,6 +13,7 @@ use fields (
 
 use Storable ();
 use Digest::SHA1 qw(sha1);
+use Net::OpenID::Common;
 
 sub new {
     my Net::OpenID::Association $self = shift;
@@ -96,7 +97,7 @@ sub server_assoc {
     }
 
     # make a new association
-    my $dh = _default_dh();
+    my $dh = OpenID::util::get_dh();
 
     my %post = (
                 "openid.mode" => "associate",
@@ -213,16 +214,6 @@ sub invalidate_handle {
         or return;
     $cache->set("hassoc:$server:$handle", "");
 }
-
-sub _default_dh {
-    my $dh = Crypt::DH::GMP->new;
-    $dh->p("155172898181473697471232257763715539915724801966915404479707795314057629378541917580651227423698188993727816152646631438561595825688188889951272158842675419950341258706556549803580104870537681476726513255747040765857479291291572334510643245094715007229621094194349783925984760375594985848253359305585439638443");
-    $dh->g("2");
-    $dh->generate_keys;
-    return $dh;
-}
-
-
 
 1;
 
