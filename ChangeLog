@@ -1,4 +1,4 @@
-1.10:
+1.030099_001
 
     * Use Crypt::DH::GMP over Crypt::DH for speed (Robert Norris)
 
