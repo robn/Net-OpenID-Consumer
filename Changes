@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+1.030099_001 Nov 06 2010
+
     * Use Crypt::DH::GMP over Crypt::DH for speed (Robert Norris)
 
     * Fix potential timing attack when checking signatures (Adam Sjøgren)
