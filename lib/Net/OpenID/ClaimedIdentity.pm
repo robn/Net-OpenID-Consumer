@@ -13,6 +13,8 @@ use fields (
     'extension_args',   # Extension arguments that the caller wants to add to the request
 );
 
+use Digest::SHA qw(hmac_sha1_hex);
+
 sub new {
     my Net::OpenID::ClaimedIdentity $self = shift;
     $self = fields::new( $self ) unless ref $self;
@@ -127,7 +129,7 @@ sub check_url {
     # add a HMAC-signed time so we can verify the return_to URL wasn't spoofed
     my $sig_time = time();
     my $c_secret = $csr->_get_consumer_secret($sig_time);
-    my $sig = substr(OpenID::util::hmac_sha1_hex($sig_time, $c_secret), 0, 20);
+    my $sig = substr(hmac_sha1_hex($sig_time, $c_secret), 0, 20);
     OpenID::util::push_url_arg(\$return_to,
                                "oic.time", "${sig_time}-$sig");
 
