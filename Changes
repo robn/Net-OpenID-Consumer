@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+1.030099_003 Nov 09 2010
+
     * Add namespace to check_authentication signature verification calls to
       fix stateless mode against strict OPs (Robert Norris)
       
