@@ -1,5 +1,8 @@
 {{$NEXT}}
 
+    * Add namespace to check_authentication signature verification calls to
+      fix stateless mode against strict OPs (Robert Norris)
+      
     * Documentation tweaks (Robert Norris)
  
 1.030099_002 Nov 07 2010

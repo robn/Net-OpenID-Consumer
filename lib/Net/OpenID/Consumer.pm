@@ -822,6 +822,10 @@ sub verified_identity {
                     "openid.sig"          => $sig64,
                     );
 
+        if ($self->_message_version >= 2) {
+            $post{'openid.ns'} = OpenID::util::VERSION_2_NAMESPACE();
+        }
+
         # and copy in all signed parameters that we don't already have into %post
         foreach my $param (split(/,/, $signed)) {
             next unless $param =~ /^[\w\.]+$/;
