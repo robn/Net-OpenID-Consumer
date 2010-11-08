@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+    * Documentation tweaks (Robert Norris)
+ 
 1.030099_002 Nov 07 2010
 
     * Fixed a call to OpenID::util::hmac_sha1_hex which no longer exists

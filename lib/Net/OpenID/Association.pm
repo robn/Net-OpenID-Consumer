@@ -221,7 +221,7 @@ __END__
 
 =head1 NAME
 
-Net::OpenID::Association - a relationship with an identity server
+Net::OpenID::Association - A relationship with an identity server
 
 =head1 DESCRIPTION
 

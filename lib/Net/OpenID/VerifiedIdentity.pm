@@ -271,7 +271,7 @@ __END__
 
 =head1 NAME
 
-Net::OpenID::VerifiedIdentity - object representing a verified OpenID identity
+Net::OpenID::VerifiedIdentity - Object representing a verified OpenID identity
 
 =head1 SYNOPSIS
 

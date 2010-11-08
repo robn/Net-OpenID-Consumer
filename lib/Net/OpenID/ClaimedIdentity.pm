@@ -206,7 +206,7 @@ __END__
 
 =head1 NAME
 
-Net::OpenID::ClaimedIdentity - a not-yet-verified OpenID identity
+Net::OpenID::ClaimedIdentity - A not-yet-verified OpenID identity
 
 =head1 SYNOPSIS
 

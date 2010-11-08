@@ -895,7 +895,7 @@ __END__
 
 =head1 NAME
 
-Net::OpenID::Consumer - library for consumers of OpenID identities
+Net::OpenID::Consumer - Library for consumers of OpenID identities
 
 =head1 SYNOPSIS
 
