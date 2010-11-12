@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+    * Added example CGI program (Robert Norris)
+
 1.030099_003 Nov 09 2010
 
     * Add namespace to check_authentication signature verification calls to
