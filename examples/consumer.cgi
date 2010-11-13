@@ -15,6 +15,7 @@ use strict;
 use CGI ();
 use CGI::Carp qw(fatalsToBrowser);
 use Net::OpenID::Consumer 1.030099;
+use LWP::UserAgent;
 
 my $cgi = CGI->new;
 
