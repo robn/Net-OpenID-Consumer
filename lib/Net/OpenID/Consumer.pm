@@ -169,6 +169,15 @@ sub _fail {
         'protocol_version_incorrect' => "The provided URL uses the wrong protocol version",
         'naive_verify_failed_return' => "Provider says signature is invalid",
         'naive_verify_failed_network' => "Could not contact provider to verify signature",
+        'bogus_return_to' => "The provided return URL doesn't match required_root.",
+        'expired_association' => "Association between Provider and Relying Pary has expired.",
+        'no_identity' => "No identity was provided by the OpenID identity server.",
+        'no_return_to' => "No return URL was provided by the OpenID identity server.",
+        'no_sig' => "No signature URL was provided by the OpenID identity server.",
+        'signature_mismatch' => "The returned signature doesn't match.",
+        'time_bad_sig' => "Bad time on signature.",
+        'time_expired' => "Signature time expired.",
+        'time_in_future' => "The OpenID identity server provided a time in the future.",
     }->{$code};
 
     $self->{last_errcode} = $code;
