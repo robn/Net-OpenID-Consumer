@@ -1,5 +1,8 @@
 {{$NEXT}}
 
+    * Remove calls to util::ejs and util::eurl; use JSON and URI::Escape
+      directly (Robert Norris)
+
 1.030099_004 Dec 18 2010
 
     * Added example CGI program (Robert Norris)

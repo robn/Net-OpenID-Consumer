@@ -4,6 +4,7 @@ use strict;
 use Carp ();
 use LWP::UserAgent;
 use Storable;
+use JSON qw(encode_json);
 
 ############################################################################
 package Net::OpenID::Consumer;
@@ -189,7 +190,7 @@ sub _fail {
 
 sub json_err {
     my Net::OpenID::Consumer $self = shift;
-    return OpenID::util::js_dumper({
+    return encode_json({
         err_code => $self->{last_errcode},
         err_text => $self->{last_errtext},
     });
@@ -852,7 +853,7 @@ sub verified_identity {
 
         my $req = HTTP::Request->new(POST => $server);
         $req->header("Content-Type" => "application/x-www-form-urlencoded");
-        $req->content(join("&", map { "$_=" . OpenID::util::eurl($post{$_}) } keys %post));
+        $req->content(join("&", map { "$_=" . uri_escape($post{$_}) } keys %post));
 
         my $ua  = $self->ua;
         my $res = $ua->request($req);

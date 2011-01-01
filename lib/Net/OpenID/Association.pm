@@ -14,6 +14,7 @@ use fields (
 use Storable ();
 use Digest::SHA1 qw(sha1);
 use Net::OpenID::Common;
+use URI::Escape qw(uri_escape);
 
 sub new {
     my Net::OpenID::Association $self = shift;
@@ -112,7 +113,7 @@ sub server_assoc {
 
     my $req = HTTP::Request->new(POST => $server);
     $req->header("Content-Type" => "application/x-www-form-urlencoded");
-    $req->content(join("&", map { "$_=" . OpenID::util::eurl($post{$_}) } keys %post));
+    $req->content(join("&", map { "$_=" . uri_escape($post{$_}) } keys %post));
 
     $csr->_debug("Associate mode request: " . $req->content);
 
