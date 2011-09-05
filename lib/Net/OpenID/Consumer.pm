@@ -230,18 +230,8 @@ sub _find_semantic_info {
     my $url = shift;
     my $final_url_ref = shift;
 
-    my $trim_hook = sub {
-        my $htmlref = shift;
-        # trim everything past the body.  this is in case the user doesn't
-        # have a head document and somebody was able to inject their own
-        # head.  -- brad choate
-        $$htmlref =~ s/<body\b.*//is;
-    };
+    my $doc = $self->_get_url_contents($url, $final_url_ref, \&OpenID::util::_extract_head_markup_only) || '';
 
-    my $doc = $self->_get_url_contents($url, $final_url_ref, $trim_hook) || '';
-
-    # find <head> content of document (notably: the first head, if an attacker
-    # has added others somehow)
     return $self->_fail("no_head_tag", "Couldn't find OpenID servers due to no head tag")
         unless $doc =~ m!<head[^>]*>(.*?)</head>!is;
     my $head = $1;
