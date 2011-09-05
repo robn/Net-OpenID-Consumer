@@ -29,7 +29,7 @@ use Net::OpenID::URIFetch;
 use Net::OpenID::Common; # To get the OpenID::util package
 
 use MIME::Base64 ();
-use Digest::SHA qw(hmac_sha1 hmac_sha1_hex);
+use Digest::SHA qw(hmac_sha1_hex);
 use Time::Local;
 use HTTP::Request;
 use LWP::UserAgent;
@@ -840,7 +840,8 @@ sub verified_identity {
             $signed_fields{$param} = $val;
         }
 
-        my $good_sig = OpenID::util::b64(hmac_sha1($token, $assoc->secret));
+        utf8::encode($token);
+        my $good_sig = $assoc->generate_signature($token);
         return $self->_fail("signature_mismatch") unless OpenID::util::timing_indep_eq($sig64, $good_sig);
 
     } else {
