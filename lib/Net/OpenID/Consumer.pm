@@ -384,8 +384,8 @@ sub handle_server_response {
         return $callbacks{not_openid}->();
     }
 
-    if (my $setup_url = $self->user_setup_url) {
-        return $callbacks{setup_required}->($setup_url);
+    if ($self->setup_needed) {
+        return $callbacks{setup_required}->($self->user_setup_url);
     }
     elsif ($self->user_cancel) {
         return $callbacks{cancelled}->();
@@ -621,6 +621,16 @@ sub claimed_identity {
 sub user_cancel {
     my Net::OpenID::Consumer $self = shift;
     return $self->_message_mode eq "cancel";
+}
+
+sub setup_needed {
+    my Net::OpenID::Consumer $self = shift;
+    if ($self->_message_version == 1) {
+        return $self->_message_mode eq "id_res" && $self->message("user_setup_url");
+    }
+    else {
+        return $self->_message_mode eq 'setup_needed';
+    }
 }
 
 sub user_setup_url {
