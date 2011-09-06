@@ -2,12 +2,10 @@
 
 use strict;
 use Carp ();
-use LWP::UserAgent;
-use Storable;
-use JSON qw(encode_json);
 
 ############################################################################
 package Net::OpenID::Consumer;
+
 
 use fields (
     'cache',           # a Cache object to store HTTP responses and associations
@@ -34,6 +32,10 @@ use MIME::Base64 ();
 use Digest::SHA qw(hmac_sha1 hmac_sha1_hex);
 use Time::Local;
 use HTTP::Request;
+use LWP::UserAgent;
+use Storable;
+use JSON qw(encode_json);
+use URI::Escape qw(uri_escape);
 
 sub new {
     my Net::OpenID::Consumer $self = shift;
