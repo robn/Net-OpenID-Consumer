@@ -108,6 +108,7 @@ sub check_url {
         $assoc = Net::OpenID::Association::handle_assoc($csr, $ident_server, $use_assoc_handle);
     } else {
         $assoc = Net::OpenID::Association::server_assoc($csr, $ident_server, $force_reassociate, (
+            %{$csr->assoc_options},
             protocol_version => $self->protocol_version,
         ));
     }

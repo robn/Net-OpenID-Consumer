@@ -18,6 +18,7 @@ use fields (
     'last_errtext',    # last error code we got
     'debug',           # debug flag or codeblock
     'minimum_version', # The minimum protocol version to support
+    'assoc_options',   # options for establishing server associations
 );
 
 use Net::OpenID::ClaimedIdentity;
@@ -50,6 +51,7 @@ sub new {
     $self->consumer_secret ( delete $opts{consumer_secret} );
     $self->required_root   ( delete $opts{required_root}   );
     $self->minimum_version ( delete $opts{minimum_version} );
+    $self->assoc_options   ( delete $opts{assoc_options}   );
 
     $self->{debug} = delete $opts{debug};
 
@@ -83,6 +85,34 @@ sub _getset {
         $self->{$param} = $val;
     }
     return $self->{$param};
+}
+
+sub assoc_options {
+    my Net::OpenID::Consumer $self = shift;
+    my $v;
+    if (scalar(@_) == 1) {
+        $v = shift;
+        unless ($v) {
+            $v = {};
+        }
+        elsif (ref $v eq 'ARRAY') {
+            $v = {@$v};
+        }
+        elsif (ref $v) {
+            # assume it's a hash and hope for the best
+            $v = {%$v};
+        }
+        else {
+            Carp::croak("single argument must be HASH or ARRAY reference");
+        }
+        $self->{assoc_options} = $v;
+    }
+    elsif (@_) {
+        Carp::croak("odd number of parameters?") 
+            if scalar(@_)%2;
+        $self->{assoc_options} = {@_};
+    }
+    return $self->{assoc_options};
 }
 
 sub _debug {
@@ -1079,6 +1109,44 @@ the only useful value you can set here is 2, which will cause
 In most cases you'll want to allow both 1.1 and 2.0 identifiers,
 which is the default. If you want, you can set this property to 1
 to make this behavior explicit.
+
+=item $csr->assoc_options(...)
+
+=item $csr->assoc_options
+
+Get or sets the hash of parameters that determine how associations 
+with servers will be made.  Available options include
+
+=over 4
+
+=item assoc_type
+
+Association type, (default 'HMAC-SHA1')
+
+=item session_type
+
+Association session type, (default 'DH-SHA1')
+
+=item max_encrypt
+
+(default FALSE) Use best encryption available for protocol version 
+for both session type and association type.  
+This overrides C<session_type> and C<assoc_type>
+
+=item session_no_encrypt_https
+
+(default FALSE) Use an unencrypted session type if server is https 
+This overrides C<max_encrypt> if both are set.
+
+=item allow_eavesdropping
+
+(default FALSE)  Because it is generally a bad idea, we abort
+assocations where an unencrypted session over a non-SSL
+connection is called for.  However the OpenID 1.1 specification
+technically allows this, so if that is what you really want,
+set this flag true.  Ignored under protocol version 2.
+
+=back
 
 =item $csr->B<message>($key)
 
