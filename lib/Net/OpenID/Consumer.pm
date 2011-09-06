@@ -225,6 +225,76 @@ sub _get_url_contents {
     return $res ? $res->content : undef;
 }
 
+sub _element_attributes { 
+    local $_ = shift;
+    my %a = ();
+    while (m!\G[[:space:]]+([^[:space:]=]+)(?:=(?:([-a-zA-Z0-9._:]+)|'([^\']+)'|"([^\"]+)")([^[:space:]]*))?!g) {
+        next if $5; # skip malformed attributes
+        my $v = (defined $2 ? $2 : defined $3 ? $3 : $4);
+        $a{lc($1)} = $v if defined $v;
+    }
+    return \%a; 
+}
+
+# List of head elements that matter for HTTP discovery.
+# Each entry defines a key for the _find_semantic_info hash
+#  [
+#    KEY         -- key name
+#    ELEMENT     -- html element name, must be 'link' or 'meta'
+#    ATTR        -- html attribute name (where key value lives)
+#    MATCH_VALUE -- string (default = KEY)
+#    MATCH_ATTRS -- list-ref of html attribute names
+#            default = ['rel']  if ELEMENT is <link...>
+#            default = ['name'] if ELEMENT is <meta...>
+#  ]
+#  _find_semantic_info->{KEY} =
+#    ATTR value of the ELEMENT for which
+#    MATCH_VALUE == ;-join of MATCH_ATTRS values
+#  
+our @HTTP_discovery_link_meta_tags = 
+  (
+   # OpenID servers / delegated identities
+   # <link rel="openid.server"
+   #       href="http://www.livejournal.com/misc/openid.bml" />
+   # <link rel="openid.delegate"
+   #       href="whatever" />
+   #
+   [qw(openid.server    link  href)], # 'openid.server'==.rel (<link> default)
+   [qw(openid.delegate  link  href)],
+
+   # OpenID2 providers / local identifiers
+   # <link rel="openid2.provider"
+   #       href="http://www.livejournal.com/misc/openid.bml" />
+   # <link rel="openid2.local_id" href="whatever" />
+   #
+   [qw(openid2.provider  link  href)],
+   [qw(openid2.local_id  link  href)],
+
+   # FOAF maker info
+   # <meta name="foaf:maker"
+   #  content="foaf:mbox_sha1sum '4caa1d6f6203d21705a00a7aca86203e82a9cf7a'"/>
+   #
+   [qw(foaf.maker  meta content foaf:maker)], # == .name  (<meta> default)
+
+   # FOAF documents
+   # <link rel="meta" type="application/rdf+xml" title="FOAF"
+   #       href="http://brad.livejournal.com/data/foaf" />
+   #
+   [qw(foaf  link  href  meta;foaf;application/rdf+xml),  [qw(rel title type)]],
+
+   # RSS
+   # <link rel="alternate" type="application/rss+xml" title="RSS"
+   #       href="http://www.livejournal.com/~brad/data/rss" />
+   #
+   [qw(rss   link  href  alternate;application/rss+xml),  [qw(rel type)]],
+
+   # Atom
+   # <link rel="alternate" type="application/atom+xml" title="Atom" 
+   #       href="http://www.livejournal.com/~brad/data/rss" />
+   #
+   [qw(atom  link  href  alternate;application/atom+xml), [qw(rel type)]],
+  );
+
 sub _find_semantic_info {
     my Net::OpenID::Consumer $self = shift;
     my $url = shift;
@@ -236,83 +306,33 @@ sub _find_semantic_info {
         unless $doc =~ m!<head[^>]*>(.*?)</head>!is;
     my $head = $1;
 
-    my $ret = {
-        'openid.server' => undef,
-        'openid.delegate' => undef,
-        'foaf' => undef,
-        'foaf.maker' => undef,
-        'rss' => undef,
-        'atom' => undef,
-    };
+    my $ret = {};
 
     # analyze link/meta tags
-    while ($head =~ m!<(link|meta)\b([^>]+)>!g) {
-        my ($type, $val) = ($1, $2);
-        my $temp;
-
-        # OpenID servers / delegated identities
-        # <link rel="openid.server" href="http://www.livejournal.com/misc/openid.bml" />
-        if ($type eq "link" &&
-            $val =~ /\brel=.openid\.(server|delegate)./i && ($temp = $1) &&
-            $val =~ m!\bhref=[\"\']([^\"\']+)[\"\']!i) {
-            $ret->{"openid.$temp"} = $1;
-            next;
-        }
-
-        # OpenID2 providers / local identifiers
-        # <link rel="openid2.provider" href="http://www.livejournal.com/misc/openid.bml" />
-        if ($type eq "link" &&
-            $val =~ /\brel=.openid2\.(provider|local_id)./i && ($temp = $1) &&
-            $val =~ m!\bhref=[\"\']([^\"\']+)[\"\']!i) {
-            $ret->{"openid2.$temp"} = $1;
-            next;
-        }
-
-        # FOAF documents
-        #<link rel="meta" type="application/rdf+xml" title="FOAF" href="http://brad.livejournal.com/data/foaf" />
-        if ($type eq "link" &&
-            $val =~ m!title=.foaf.!i &&
-            $val =~ m!rel=.meta.!i &&
-            $val =~ m!type=.application/rdf\+xml.!i &&
-            $val =~ m!href=[\"\']([^\"\']+)[\"\']!i) {
-            $ret->{"foaf"} = $1;
-            next;
-        }
-
-        # FOAF maker info
-        # <meta name="foaf:maker" content="foaf:mbox_sha1sum '4caa1d6f6203d21705a00a7aca86203e82a9cf7a'" />
-        if ($type eq "meta" &&
-            $val =~ m!name=.foaf:maker.!i &&
-            $val =~ m!content=([\'\"])(.*?)\1!i) {
-            $ret->{"foaf.maker"} = $2;
-            next;
-        }
-
-        if ($type eq "meta" &&
-            $val =~ m!name=.foaf:maker.!i &&
-            $val =~ m!content=([\'\"])(.*?)\1!i) {
-            $ret->{"foaf.maker"} = $2;
-            next;
-        }
-
-        # RSS
-        # <link rel="alternate" type="application/rss+xml" title="RSS" href="http://www.livejournal.com/~brad/data/rss" />
-        if ($type eq "link" &&
-            $val =~ m!rel=.alternate.!i &&
-            $val =~ m!type=.application/rss\+xml.!i &&
-            $val =~ m!href=[\"\']([^\"\']+)[\"\']!i) {
-            $ret->{"rss"} = $1;
-            next;
-        }
-
-        # Atom
-        # <link rel="alternate" type="application/atom+xml" title="Atom" href="http://www.livejournal.com/~brad/data/rss" />
-        if ($type eq "link" &&
-            $val =~ m!rel=.alternate.!i &&
-            $val =~ m!type=.application/atom\+xml.!i &&
-            $val =~ m!href=[\"\']([^\"\']+)[\"\']!i) {
-            $ret->{"atom"} = $1;
-            next;
+    my @linkmetas = ();
+    while ($head =~ m!<(link|meta)([[:space:]][^>]*?)/?>!ig) {
+        my $tag = lc($1);
+        my $lm = _element_attributes($2); 
+        $lm->{' tag'} = $tag;
+        if ($tag eq 'link' && (($lm->{rel}||'') =~ m/[[:space:]]/)) {
+            # split <link rel="foo bar..." href="whatever"... /> into multiple <link>s
+            push @linkmetas, map { +{%{$lm}, rel => $_} } split /[[:space:]]+/,$lm->{rel};
+        } 
+        else {
+            push @linkmetas, $lm;
+        } 
+    }
+    for my $lm (@linkmetas) {
+        for (@HTTP_discovery_link_meta_tags) {
+            my ($target, $elt, $vattrib, $string, $attribs) = @$_;
+            next if $elt ne $lm->{' tag'};
+ 
+            $string  ||= $target;
+            $attribs ||= [$elt eq 'meta' ? 'name' : 'rel'];
+            next if $string ne join ';', map {lc($lm->{$_})} @$attribs;
+ 
+            $ret->{$target} = $lm->{$vattrib};
+            last;
         }
     }
 
