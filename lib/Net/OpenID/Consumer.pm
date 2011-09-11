@@ -188,31 +188,35 @@ sub ua {
     $self->{ua};
 }
 
+our %Error_text = 
+   (
+    'bad_mode'                    => "The openid.mode argument is not correct",
+    'bogus_return_to'             => "Return URL does not match required_root.",
+    'bogus_url'                   => "URL scheme must be http: or https:",
+    'empty_url'                   => "No URL entered.",
+    'expired_association'         => "Association between ID provider and relying party has expired.",
+    'naive_verify_failed_network' => "Could not contact ID provider to verify response.",
+    'naive_verify_failed_return'  => "Direct contact invalidated ID provider response.",
+    'no_head_tag'                 => "Could not determine ID provider; URL document has no <head>.",
+    'no_identity'                 => "Identity is missing from ID provider response.",
+    'no_identity_server'          => "Could not determine ID provider from URL.",
+    'no_return_to'                => "Return URL is missing from ID provider response.",
+    'no_sig'                      => "Signature is missing from ID provider response.",
+    'protocol_version_incorrect'  => "ID provider does not support minimum protocol version",
+    'signature_mismatch'          => "Prior association invalidated ID provider response.",
+    'time_bad_sig'                => "Return_to signature is not valid.",
+    'time_expired'                => "Return_to signature is stale.",
+    'time_in_future'              => "Return_to signature is from the future.",
+    'unsigned_field'              => sub { "Field(s) must be signed: " . join(", ", @_) },
+    'url_fetch_err'               => "Error fetching the provided URL.",
+   );
+
 sub _fail {
     my Net::OpenID::Consumer $self = shift;
-    my ($code, $text) = @_;
+    my ($code, $text, @params) = @_;
 
-    $text ||= {
-        'bad_mode'                    => "The openid.mode argument is not correct",
-        'bogus_return_to'             => "The provided return URL doesn't match required_root.",
-        'bogus_url'                   => "Invalid URL.",
-        'empty_url'                   => "No URL entered.",
-        'expired_association'         => "Association between Provider and Relying Pary has expired.",
-        'naive_verify_failed_network' => "Could not contact provider to verify signature",
-        'naive_verify_failed_return'  => "Provider says signature is invalid",
-        'no_head_tag'                 => "URL provided doesn't seem to have a head tag.",
-        'no_identity'                 => "No identity was provided by the OpenID identity server.",
-        'no_identity_server'          => "The provided URL doesn't declare its OpenID identity server.",
-        'no_return_to'                => "No return URL was provided by the OpenID identity server.",
-        'no_sig'                      => "No signature URL was provided by the OpenID identity server.",
-        'protocol_version_incorrect'  => "The provided URL uses the wrong protocol version",
-        'signature_mismatch'          => "The returned signature doesn't match.",
-        'time_bad_sig'                => "Bad time on signature.",
-        'time_expired'                => "Signature time expired.",
-        'time_in_future'              => "The OpenID identity server provided a time in the future.",
-        'url_fetch_err'               => "Error fetching the provided URL.",
-    }->{$code};
-
+    $text ||= $Error_text{$code};
+    $text = $text->(@params) if ref($text) eq 'CODE';
     $self->{last_errcode} = $code;
     $self->{last_errtext} = $text;
 
@@ -332,7 +336,7 @@ sub _find_semantic_info {
 
     my $doc = $self->_get_url_contents($url, $final_url_ref, \&OpenID::util::_extract_head_markup_only) || '';
 
-    return $self->_fail("no_head_tag", "Couldn't find OpenID servers due to no head tag")
+    return $self->_fail("no_head_tag")
         unless $doc =~ m!<head[^>]*>(.*?)</head>!is;
     my $head = $1;
 
@@ -446,11 +450,11 @@ sub _discover_acceptable_endpoints {
     # trim whitespace
     $url =~ s/^\s+//;
     $url =~ s/\s+$//;
-    return $self->_fail("empty_url", "Empty URL") unless $url;
+    return $self->_fail("empty_url") unless $url;
 
     # do basic canonicalization
     $url = "http://$url" if $url && $url !~ m!^\w+://!;
-    return $self->_fail("bogus_url", "Invalid URL") unless $url =~ m!^https?://!i;
+    return $self->_fail("bogus_url") unless $url =~ m!^https?://!i;
     # add a slash, if none exists
     $url .= "/" unless $url =~ m!^https?://.+/!i;
 
@@ -609,11 +613,11 @@ sub claimed_identity {
     # trim whitespace
     $url =~ s/^\s+//;
     $url =~ s/\s+$//;
-    return $self->_fail("empty_url", "Empty URL") unless $url;
+    return $self->_fail("empty_url") unless $url;
 
     # do basic canonicalization
     $url = "http://$url" if $url && $url !~ m!^\w+://!;
-    return $self->_fail("bogus_url", "Invalid URL") unless $url =~ m!^https?://!i;
+    return $self->_fail("bogus_url") unless $url =~ m!^https?://!i;
     # add a slash, if none exists
     $url .= "/" unless $url =~ m!^https?://.+/!i;
 
@@ -849,10 +853,7 @@ sub verified_identity {
             $unsigned_fields{$f}++ if !$signed_fields{$f};
         }
         if (%unsigned_fields) {
-            return $self->_fail(
-                "unsigned_field",
-                "Field(s) must be signed: " . join(", ", keys %unsigned_fields)
-            );
+            return $self->_fail("unsigned_field", undef, keys %unsigned_fields);
         }
     }
 
