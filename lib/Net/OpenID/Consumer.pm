@@ -216,7 +216,7 @@ sub _fail {
     my ($code, $text, @params) = @_;
 
     $text ||= $Error_text{$code};
-    $text = $text->(@params) if ref($text) eq 'CODE';
+    $text = $text->(@params) if ref($text) && ref($text) eq 'CODE';
     $self->{last_errcode} = $code;
     $self->{last_errtext} = $text;
 
