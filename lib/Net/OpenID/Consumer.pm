@@ -1001,8 +1001,8 @@ Net::OpenID::Consumer - Library for consumers of OpenID identities
           die "Not an OpenID message";
       },
       setup_required => sub {
-          my $setup_url = shift;
-          # Redirect the user to $setup_url
+          # (openID 1) my $setup_url = shift; then redirect the user to $setup_url
+          # (openID 2) retry request in checkid_setup mode
       },
       cancelled => sub {
           # Do something appropriate when the user hits "cancel" at the OP
@@ -1018,8 +1018,9 @@ Net::OpenID::Consumer - Library for consumers of OpenID identities
   );
 
   # ... or handle the various cases yourself
-  if (my $setup_url = $csr->user_setup_url) {
-       # redirect/link/popup user to $setup_url
+  if ($csr->setup_needed) {
+       # (openID 1) redirect/link/popup user to $self->user_setup_url
+       # (openID 2) retry request in checkid_setup mode
   } elsif ($csr->user_cancel) {
        # restore web app state to prior to check_url
   } elsif (my $vident = $csr->verified_identity) {
@@ -1251,7 +1252,7 @@ The available callbacks are:
 
 =item B<not_openid> - the request isn't an OpenID response after all.
 
-=item B<setup_required>($setup_url) - the provider needs to present some UI to the user before it can respond. Send the user to the given URL by some means.
+=item B<setup_required>($setup_url) - a checkid_immediate mode request was rejected because the provider requires user interaction.  See setup_needed below.
 
 =item B<cancelled> - the user cancelled the authentication request from the provider's UI
 
@@ -1261,13 +1262,34 @@ The available callbacks are:
 
 =back
 
+=item $csr->B<setup_needed>
+
+Returns true if a checkid_immediate request failed because the provider
+requires user interaction.  The correct action to take at this point
+depends on the OpenID protocol version
+
+(Version 1) Redirect to or otherwise make available a link to 
+C<$csr>->C<user_setup_url>. 
+
+(Version 2) Retry the request in checkid_setup mode; the provider will
+then issue redirects as needed.  In this case you I<cannot> rely on
+C<$user_setup_url> having been set nor should you do anything with it
+even if it has.
+
 =item $csr->B<user_setup_url>( [ %opts ] )
 
-Returns the URL the user must return to in order to login, setup trust,
-or do whatever the identity server needs them to do in order to make
-the identity assertion which they previously initiated by entering
-their claimed identity URL.  Returns undef if this setup URL isn't
-required, in which case you should ask for the verified_identity.
+(Version 1 only) Returns the URL the user must return to in order to
+login, setup trust, or do whatever the identity server needs them to
+do in order to make the identity assertion which they previously
+initiated by entering their claimed identity URL.
+
+=over
+
+B<N.B.>: Checking whether C<user_setup_url> is set in order to determine 
+whether a checkid_immediate request failed is DEPRECATED and will fail
+under OpenID 2.0.  Use C<setup_needed()> instead.
+
+=back
 
 The base URL this this function returns can be modified by using the
 following options in %opts:

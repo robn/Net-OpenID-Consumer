@@ -1,5 +1,20 @@
 {{$NEXT}}
 
+    * API CHANGE:  setup_needed()
+      should be used to test for the failed checkid_immediate case.
+
+      Testing for user_setup_url() having been set will NOT work under
+      OpenID 2.0 since user_setup_url is not meaningful in 2.0.
+
+    * API CHANGE:  handle_server_response()
+      Under OpenID 2.0, the setup_url argument to the setup_required
+      callback will most likely be undef (and arguably should be
+      ignored even if it isn't).
+
+      In OpenID 2.0, the correct way to handle failure of a
+      checkid_immediate mode request is to retry the request in
+      checkid_setup mode.  user_setup_url is not used.
+
 1.030099_005 Jan 01 2011
 
     * Remove calls to util::ejs and util::eurl; use JSON and URI::Escape
