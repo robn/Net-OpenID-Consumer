@@ -412,7 +412,7 @@ sub handle_server_response {
     foreach my $cb (qw(not_openid setup_required cancelled verified error)) {
         $callbacks{$cb} = delete($callbacks_in{$cb}) || sub { Carp::croak("No ".$cb." callback") };
     }
-    Carp::croak("Unknown callbacks ".join(',', keys %callbacks)) if %callbacks_in;
+    Carp::croak("Unknown callbacks:  ".join(',', keys %callbacks_in)) if %callbacks_in;
 
     unless ($self->is_server_response) {
         return $callbacks{not_openid}->();
