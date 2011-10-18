@@ -1178,7 +1178,7 @@ If you pass in an Apache $r object, you must not have already called
 $r->content as the consumer module will want to get the request
 arguments out of here in the case of a POST request.
 
-2. Get a paramater:
+2. Get a parameter:
 
 my $foo = $csr->args("foo");
 
