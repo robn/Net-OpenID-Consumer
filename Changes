@@ -31,6 +31,19 @@
           not meaningful in 2.0 (even if some 2.0 providers do in fact
           supply it).
 
+    * Handle 2.0 provider 'error' mode responses
+
+    * Remove dependency in ordering of minimum_version() and args() setters
+
+    * Fix handle_server_response unknown callback error message -- close #58368
+
+    * Introduce consumer->assoc_options
+
+    * Handle version 2.0 associations and all session/association types
+
+    * Fix bug in handling of sreg extension under 2.0
+
+    * New co-maintainer (Roger Crew)
 
 1.030099_005 Jan 01 2011
 
