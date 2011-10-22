@@ -43,8 +43,6 @@ sub new {
     $self = fields::new( $self ) unless ref $self;
     my %opts = @_;
 
-    $opts{minimum_version} ||= 1;
-
     $self->{ua}            = delete $opts{ua};
     $self->args            ( delete $opts{args}            );
     $self->cache           ( delete $opts{cache}           );
@@ -61,18 +59,15 @@ sub new {
 
 # NOTE: This method is here only to support the openid-test library.
 # Don't call it from anywhere else, or you'll break when it gets 
-# removed. Instead, set the minimum_version property.
-# FIXME: Can we just make openid-test set minimum_version and get
-# rid of this?
+# removed. Instead, call minimum_version(2).
+# FIXME: Can we just make openid-test do that and get rid of this?
 sub disable_version_1 {
-    my $self = shift;
-    $self->{minimum_version} = 2.0;
+    $_[0]->minimum_version(2);
 }
 
 sub cache           { &_getset; }
 sub consumer_secret { &_getset; }
 sub required_root   { &_getset; }
-sub minimum_version { &_getset; }
 
 sub _getset {
     my Net::OpenID::Consumer $self = shift;
@@ -85,6 +80,18 @@ sub _getset {
         $self->{$param} = $val;
     }
     return $self->{$param};
+}
+
+sub minimum_version {
+    my Net::OpenID::Consumer $self = shift;
+
+    if (@_) {
+        my $minv = shift;
+        Carp::croak("Too many parameters") if @_;
+        $minv = 1 unless $minv && $minv > 1;
+        $self->{minimum_version} = $minv;
+    }
+    return $self->{minimum_version};
 }
 
 sub assoc_options {
@@ -142,36 +149,39 @@ sub args {
         unless (ref $what) {
             return $self->{args} ? $self->{args}->($what) : Carp::croak("No args defined");
         }
-        else {
-            Carp::croak("Too many parameters") if @_;
-            my $message = Net::OpenID::IndirectMessage->new($what, (
-                minimum_version => $self->minimum_version,
-            ));
-            $self->{message} = $message;
-            $self->{args} = $message ? $message->getter : sub { undef };
-        }
+        Carp::croak("Too many parameters") if @_;
+
+        # since we do not require field setters to be called in any particular order,
+        # we cannot pass minimum_version here as it might change later.
+        my $message = Net::OpenID::IndirectMessage->new($what);
+        $self->{message} = $message;
+        $self->{args} = $message ? $message->getter : sub { undef };
     }
     $self->{args};
 }
 
 sub message {
     my Net::OpenID::Consumer $self = shift;
-    if (my $key = shift) {
-        return $self->{message} ? $self->{message}->get($key) : undef;
+    my $message = $self->{message};
+    return undef
+      unless $message &&
+        ($self->{minimum_version} <= $message->protocol_version);
+
+    if (@_) {
+        return $message->get($_[0]);
     }
     else {
-        return $self->{message};
+        return $message;
     }
 }
 
 sub _message_mode {
-    my $message = $_[0]->message;
-    return $message ? $message->mode : undef;
+    return $_[0]->message('mode');
 }
 
 sub _message_version {
     my $message = $_[0]->message;
-    return $message ? $message->protocol_version : undef;
+    return $message ? $message->protocol_version : 0;
 }
 
 sub ua {
@@ -1106,7 +1116,8 @@ Your secret may not exceed 255 characters.
 
 Get or set the minimum OpenID protocol version supported. Currently
 the only useful value you can set here is 2, which will cause
-1.1 identifiers to fail discovery with the error C<protocol_version_incorrect>.
+1.1 identifiers to fail discovery with the error C<protocol_version_incorrect>
+and responses from version 1 providers to not be recognized.
 
 In most cases you'll want to allow both 1.1 and 2.0 identifiers,
 which is the default. If you want, you can set this property to 1
