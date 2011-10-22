@@ -58,7 +58,7 @@ sub new {
 }
 
 # NOTE: This method is here only to support the openid-test library.
-# Don't call it from anywhere else, or you'll break when it gets 
+# Don't call it from anywhere else, or you'll break when it gets
 # removed. Instead, call minimum_version(2).
 # FIXME: Can we just make openid-test do that and get rid of this?
 sub disable_version_1 {
@@ -115,7 +115,7 @@ sub assoc_options {
         $self->{assoc_options} = $v;
     }
     elsif (@_) {
-        Carp::croak("odd number of parameters?") 
+        Carp::croak("odd number of parameters?")
             if scalar(@_)%2;
         $self->{assoc_options} = {@_};
     }
@@ -210,7 +210,7 @@ sub ua {
     $self->{ua};
 }
 
-our %Error_text = 
+our %Error_text =
    (
     'bad_mode'                    => "The openid.mode argument is not correct",
     'bogus_return_to'             => "Return URL does not match required_root.",
@@ -238,7 +238,7 @@ sub _fail {
     my Net::OpenID::Consumer $self = shift;
     my ($code, $text, @params) = @_;
 
-    # 'bad_mode' is only an error if we survive to the end of 
+    # 'bad_mode' is only an error if we survive to the end of
     # .mode dispatch without having figured out what to do;
     # it should not overwrite other errors.
     unless ($self->{last_errcode} && $code eq 'bad_mode') {
@@ -286,7 +286,7 @@ sub _get_url_contents {
     return $res ? $res->content : undef;
 }
 
-sub _element_attributes { 
+sub _element_attributes {
     local $_ = shift;
     my %a = ();
     while (m!\G[[:space:]]+([^[:space:]=]+)(?:=(?:([-a-zA-Z0-9._:]+)|'([^\']+)'|"([^\"]+)")([^[:space:]]*))?!g) {
@@ -294,7 +294,7 @@ sub _element_attributes {
         my $v = (defined $2 ? $2 : defined $3 ? $3 : $4);
         $a{lc($1)} = $v if defined $v;
     }
-    return \%a; 
+    return \%a;
 }
 
 # List of head elements that matter for HTTP discovery.
@@ -311,8 +311,8 @@ sub _element_attributes {
 #  _find_semantic_info->{KEY} =
 #    ATTR value of the ELEMENT for which
 #    MATCH_VALUE == ;-join of MATCH_ATTRS values
-#  
-our @HTTP_discovery_link_meta_tags = 
+#
+our @HTTP_discovery_link_meta_tags =
   (
    # OpenID servers / delegated identities
    # <link rel="openid.server"
@@ -350,7 +350,7 @@ our @HTTP_discovery_link_meta_tags =
    [qw(rss   link  href  alternate;application/rss+xml),  [qw(rel type)]],
 
    # Atom
-   # <link rel="alternate" type="application/atom+xml" title="Atom" 
+   # <link rel="alternate" type="application/atom+xml" title="Atom"
    #       href="http://www.livejournal.com/~brad/data/rss" />
    #
    [qw(atom  link  href  alternate;application/atom+xml), [qw(rel type)]],
@@ -373,25 +373,25 @@ sub _find_semantic_info {
     my @linkmetas = ();
     while ($head =~ m!<(link|meta)([[:space:]][^>]*?)/?>!ig) {
         my $tag = lc($1);
-        my $lm = _element_attributes($2); 
+        my $lm = _element_attributes($2);
         $lm->{' tag'} = $tag;
         if ($tag eq 'link' && (($lm->{rel}||'') =~ m/[[:space:]]/)) {
             # split <link rel="foo bar..." href="whatever"... /> into multiple <link>s
             push @linkmetas, map { +{%{$lm}, rel => $_} } split /[[:space:]]+/,$lm->{rel};
-        } 
+        }
         else {
             push @linkmetas, $lm;
-        } 
+        }
     }
     for my $lm (@linkmetas) {
         for (@HTTP_discovery_link_meta_tags) {
             my ($target, $elt, $vattrib, $string, $attribs) = @$_;
             next if $elt ne $lm->{' tag'};
- 
+
             $string  ||= $target;
             $attribs ||= [$elt eq 'meta' ? 'name' : 'rel'];
             next if $string ne join ';', map {lc($lm->{$_})} @$attribs;
- 
+
             $ret->{$target} = $lm->{$vattrib};
             last;
         }
@@ -1167,7 +1167,7 @@ to make this behavior explicit.
 
 =item $csr->assoc_options
 
-Get or sets the hash of parameters that determine how associations 
+Get or sets the hash of parameters that determine how associations
 with servers will be made.  Available options include
 
 =over 4
@@ -1182,13 +1182,13 @@ Association session type, (default 'DH-SHA1')
 
 =item max_encrypt
 
-(default FALSE) Use best encryption available for protocol version 
-for both session type and association type.  
+(default FALSE) Use best encryption available for protocol version
+for both session type and association type.
 This overrides C<session_type> and C<assoc_type>
 
 =item session_no_encrypt_https
 
-(default FALSE) Use an unencrypted session type if server is https 
+(default FALSE) Use an unencrypted session type if server is https
 This overrides C<max_encrypt> if both are set.
 
 =item allow_eavesdropping
@@ -1331,8 +1331,8 @@ Returns true if a checkid_immediate request failed because the provider
 requires user interaction.  The correct action to take at this point
 depends on the OpenID protocol version
 
-(Version 1) Redirect to or otherwise make available a link to 
-C<$csr>->C<user_setup_url>. 
+(Version 1) Redirect to or otherwise make available a link to
+C<$csr>->C<user_setup_url>.
 
 (Version 2) Retry the request in checkid_setup mode; the provider will
 then issue redirects as needed.
@@ -1356,7 +1356,7 @@ initiated by entering their claimed identity URL.
 
 =over
 
-B<N.B.>: Checking whether C<user_setup_url> is set in order to determine 
+B<N.B.>: Checking whether C<user_setup_url> is set in order to determine
 whether a checkid_immediate request failed is DEPRECATED and will fail
 under OpenID 2.0.  Use C<setup_needed()> instead.
 
