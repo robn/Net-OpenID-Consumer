@@ -155,7 +155,19 @@ sub args {
         # we cannot pass minimum_version here as it might change later.
         my $message = Net::OpenID::IndirectMessage->new($what);
         $self->{message} = $message;
-        $self->{args} = $message ? $message->getter : sub { undef };
+        if ($message) {
+            $self->{args} = $message->getter;
+
+            # handle OpenID 2.0 'error' mode
+            # (may as well do this here; we may not get another chance
+            # since handle_server_response is not a required part of the API)
+            if ($message->protocol_version >= 2 && $message->mode eq 'error') {
+                $self->_fail('provider_error',$message->get('error'));
+            }
+        }
+        else {
+            $self->{args} = sub { undef };
+        }
     }
     $self->{args};
 }
@@ -213,6 +225,7 @@ our %Error_text =
     'no_return_to'                => "Return URL is missing from ID provider response.",
     'no_sig'                      => "Signature is missing from ID provider response.",
     'protocol_version_incorrect'  => "ID provider does not support minimum protocol version",
+    'provider_error'              => "ID provider-specific error",
     'signature_mismatch'          => "Prior association invalidated ID provider response.",
     'time_bad_sig'                => "Return_to signature is not valid.",
     'time_expired'                => "Return_to signature is stale.",
@@ -225,12 +238,16 @@ sub _fail {
     my Net::OpenID::Consumer $self = shift;
     my ($code, $text, @params) = @_;
 
-    $text ||= $Error_text{$code};
-    $text = $text->(@params) if ref($text) && ref($text) eq 'CODE';
-    $self->{last_errcode} = $code;
-    $self->{last_errtext} = $text;
-
-    $self->_debug("fail($code) $text");
+    # 'bad_mode' is only an error if we survive to the end of 
+    # .mode dispatch without having figured out what to do;
+    # it should not overwrite other errors.
+    unless ($self->{last_errcode} && $code eq 'bad_mode') {
+        $text ||= $Error_text{$code};
+        $text = $text->(@params) if ref($text) && ref($text) eq 'CODE';
+        $self->{last_errcode} = $code;
+        $self->{last_errtext} = $text;
+        $self->_debug("fail($code) $text");
+    }
     wantarray ? () : undef;
 }
 
