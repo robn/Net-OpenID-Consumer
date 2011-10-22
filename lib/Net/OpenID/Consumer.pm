@@ -436,19 +436,43 @@ sub handle_server_response {
     my %callbacks_in = @_;
     my %callbacks = ();
 
-    foreach my $cb (qw(not_openid setup_required cancelled verified error)) {
+    foreach my $cb (qw(not_openid cancelled verified error)) {
         $callbacks{$cb} = delete($callbacks_in{$cb}) || sub { Carp::croak("No ".$cb." callback") };
     }
-    Carp::croak("Unknown callbacks:  ".join(',', keys %callbacks_in)) if %callbacks_in;
+
+    # backwards compatibility:
+    #   'setup_needed' is expected as of 1.04
+    #   'setup_required' is deprecated but allowed in its place,
+    my $found_setup_callback = 0;
+    foreach my $cb (qw(setup_needed setup_required)) {
+        $callbacks{$cb} = delete($callbacks_in{$cb}) and $found_setup_callback++;
+    }
+    Carp::croak($found_setup_callback > 1
+                ? "Cannot have both setup_needed and setup_required"
+                : "No setup_needed callback")
+        unless $found_setup_callback == 1;
+
+    Carp::croak("Unknown callbacks:  ".join(',', keys %callbacks_in))
+        if %callbacks_in;
 
     unless ($self->is_server_response) {
         return $callbacks{not_openid}->();
     }
 
     if ($self->setup_needed) {
-        return $callbacks{setup_required}->($self->user_setup_url);
+        return $callbacks{setup_needed}->()
+          unless ($callbacks{setup_required});
+
+        my $setup_url = $self->user_setup_url;
+        return $callbacks{setup_required}->($setup_url)
+          if $setup_url;
+        # otherwise FALL THROUGH to preserve prior behavior,
+        # Even though this is broken, old clients could have
+        # put a workaround into the 'error' callback to handle
+        # the setup_needed+(setup_url=undef) case
     }
-    elsif ($self->user_cancel) {
+
+    if ($self->user_cancel) {
         return $callbacks{cancelled}->();
     }
     elsif (my $vident = $self->verified_identity) {
@@ -1024,8 +1048,8 @@ Net::OpenID::Consumer - Library for consumers of OpenID identities
       not_openid => sub {
           die "Not an OpenID message";
       },
-      setup_required => sub {
-          # (openID 1) my $setup_url = shift; then redirect the user to $setup_url
+      setup_needed => sub {
+          # (openID 1) redirect user to $csr->user_setup_url
           # (openID 2) retry request in checkid_setup mode
       },
       cancelled => sub {
@@ -1042,7 +1066,9 @@ Net::OpenID::Consumer - Library for consumers of OpenID identities
   );
 
   # ... or handle the various cases yourself
-  if ($csr->setup_needed) {
+  unless ($the_csr->is_server_response) {
+      die "Not an OpenID message";
+  } elsif ($csr->setup_needed) {
        # (openID 1) redirect/link/popup user to $self->user_setup_url
        # (openID 2) retry request in checkid_setup mode
   } elsif ($csr->user_cancel) {
@@ -1277,15 +1303,27 @@ The available callbacks are:
 
 =item B<not_openid> - the request isn't an OpenID response after all.
 
-=item B<setup_required>($setup_url) - a checkid_immediate mode request was rejected because the provider requires user interaction.  See setup_needed below.
+=item B<setup_needed>() - a checkid_immediate mode request was rejected, indicating that the provider requires user interaction.
 
-=item B<cancelled> - the user cancelled the authentication request from the provider's UI
+=item B<cancelled> - the user cancelled the authentication request from the provider's UI.
 
 =item B<verified>($verified_identity) - the user's identity has been successfully verified. A L<Net::OpenID::VerifiedIdentity> object is passed in.
 
 =item B<error>($errcode, $errmsg) - an error has occured. An error code and message are provided.
 
 =back
+
+For the sake of legacy code we also allow
+
+=over 8
+
+=item B<setup_required>($setup_url) - [DEPRECATED] a checkid_immediate mode request was rejected AND $setup_url was provided.
+
+=back
+
+however clients using this callback should be updated to use B<setup_needed>
+at the earliest opportunity.  Here $setup_url is the same as returned by
+B<user_setup_url>.
 
 =item $csr->B<setup_needed>
 
@@ -1297,9 +1335,17 @@ depends on the OpenID protocol version
 C<$csr>->C<user_setup_url>. 
 
 (Version 2) Retry the request in checkid_setup mode; the provider will
-then issue redirects as needed.  In this case you I<cannot> rely on
-C<$user_setup_url> having been set nor should you do anything with it
-even if it has.
+then issue redirects as needed.
+
+=over
+
+B<N.B.>: While some providers have been known to supply the C<user_setup_url>
+parameter in Version 2 C<setup_needed> responses, you I<cannot> rely on this,
+and, moreover, since the OpenID 2.0 specification has nothing to say about
+the meaning of such a parameter, you cannot rely on it meaning anything
+in particular even if it is supplied.
+
+=back
 
 =item $csr->B<user_setup_url>( [ %opts ] )
 

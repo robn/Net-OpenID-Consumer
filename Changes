@@ -1,19 +1,36 @@
 {{$NEXT}}
 
-    * API CHANGE:  setup_needed()
-      should be used to test for the failed checkid_immediate case.
+    * In OpenID 2.0, the correct way to handle failure of a
+      checkid_immediate mode request is to retry the same request
+      again in checkid_setup mode.  user_setup_url is not supposed to
+      be used AT ALL.
 
-      Testing for user_setup_url() having been set will NOT work under
-      OpenID 2.0 since user_setup_url is not meaningful in 2.0.
+      This entails two API changes:
 
-    * API CHANGE:  handle_server_response()
-      Under OpenID 2.0, the setup_url argument to the setup_required
-      callback will most likely be undef (and arguably should be
-      ignored even if it isn't).
+        + Consumer->handle_server_response()
 
-      In OpenID 2.0, the correct way to handle failure of a
-      checkid_immediate mode request is to retry the request in
-      checkid_setup mode.  user_setup_url is not used.
+          The 'setup_required' callback is now DEPRECATED but retained
+          for now for the sake of legacy code.  It may be removed in a
+          future release.
+
+          The 'setup_needed' callback should be used for new code and to
+          make existing clients work properly with OpenID 2.0 providers.
+          This callback, unlike 'setup_required'
+            (1) is invoked in ALL cases where a checkid_immediate mode
+                request fails, including those where user_setup_url
+                is not supplied, and
+            (2) does NOT take a user_setup_url parameter
+
+        + Consumer->setup_needed()  [new function]
+
+          should be used to test for the failed checkid_immediate case
+          when not using handle_server_response().
+
+          Testing for user_setup_url() having been set is DEPRECATED and
+          will NOT work under OpenID 2.0 since user_setup_url is generally
+          not meaningful in 2.0 (even if some 2.0 providers do in fact
+          supply it).
+
 
 1.030099_005 Jan 01 2011
 
