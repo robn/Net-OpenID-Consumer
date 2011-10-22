@@ -175,8 +175,8 @@ sub message {
     }
 }
 
-sub _message_mode {
-    return $_[0]->message('mode');
+sub _message_mode_is {
+    return (($_[0]->message('mode')||' ') eq $_[1]);
 }
 
 sub _message_version {
@@ -411,7 +411,7 @@ sub _find_openid_server {
 
 sub is_server_response {
     my Net::OpenID::Consumer $self = shift;
-    return $self->_message_mode ? 1 : 0;
+    return $self->message ? 1 : 0;
 }
 
 sub handle_server_response {
@@ -664,16 +664,16 @@ sub claimed_identity {
 
 sub user_cancel {
     my Net::OpenID::Consumer $self = shift;
-    return $self->_message_mode eq "cancel";
+    return $self->_message_mode_is("cancel");
 }
 
 sub setup_needed {
     my Net::OpenID::Consumer $self = shift;
     if ($self->_message_version == 1) {
-        return $self->_message_mode eq "id_res" && $self->message("user_setup_url");
+        return $self->_message_mode_is("id_res") && $self->message("user_setup_url");
     }
     else {
-        return $self->_message_mode eq 'setup_needed';
+        return $self->_message_mode_is('setup_needed');
     }
 }
 
@@ -683,16 +683,13 @@ sub user_setup_url {
     my $post_grant = delete $opts{'post_grant'};
     Carp::croak("Unknown options: " . join(", ", keys %opts)) if %opts;
 
-    my $setup_url = undef;
-
     if ($self->_message_version == 1) {
-        return $self->_fail("bad_mode") unless $self->_message_mode eq "id_res";
-        $setup_url = $self->message("user_setup_url");
+        return $self->_fail("bad_mode") unless $self->_message_mode_is("id_res");
     }
     else {
-        return undef unless $self->_message_mode eq 'setup_needed';
-        $setup_url = $self->message("user_setup_url");
+        return undef unless $self->_message_mode_is('setup_needed');
     }
+    my $setup_url = $self->message("user_setup_url");
 
     OpenID::util::push_url_arg(\$setup_url, "openid.post_grant", $post_grant)
         if $setup_url && $post_grant;
@@ -707,7 +704,7 @@ sub verified_identity {
     my $rr = delete $opts{'required_root'} || $self->{required_root};
     Carp::croak("Unknown options: " . join(", ", keys %opts)) if %opts;
 
-    return $self->_fail("bad_mode") unless $self->_message_mode eq "id_res";
+    return $self->_fail("bad_mode") unless $self->_message_mode_is("id_res");
 
     # the asserted identity (the delegated one, if there is one, since the protocol
     # knows nothing of the original URL)
