@@ -31,17 +31,21 @@
           not meaningful in 2.0 (even if some 2.0 providers do in fact
           supply it).
 
-    * Handle 2.0 provider 'error' mode responses
+    * Handle 2.0 provider 'error' mode responses.
+      These currently show up in the 'error' callback 
+      (errcode == 'provider_error');
 
-    * Remove dependency in ordering of minimum_version() and args() setters
+    * Remove dependency in ordering of minimum_version() and args()
+      setters.  This was a bug that prevented minimum_version from being
+      recognized at all.
 
     * Fix handle_server_response unknown callback error message -- close #58368
 
-    * Introduce consumer->assoc_options
-
-    * Handle version 2.0 associations and all session/association types
+    * Handle version 2.0 associations and all session/association types.
+      This is customizable using Consumer->assoc_options.
 
     * Fix bug in handling of sreg extension under 2.0
+      that prevented certain other extensions from being recognized.
 
     * New co-maintainer (Roger Crew)
 
