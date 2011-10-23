@@ -2,7 +2,7 @@
 
 use warnings;
 use strict;
-use Test::More tests => 176;
+use Test::More tests => 180;
 
 # use lib '/home/rfc/src/git/Net-OpenID-Consumer/lib';
 # use lib '/home/rfc/src/git/Net-OpenID-Common/lib';
@@ -39,6 +39,32 @@ my @common_callbacks = (
   );
 my $the_csr;
 my @handlers = (
+   broken_hsr1 => sub {
+      $the_csr->handle_server_response(
+         @common_callbacks,
+         setup_needed => sub { 'dontcare'; },
+         setup_required => sub { 'dontcare'; },
+        );
+ },
+   broken_hsr2 => sub {
+      $the_csr->handle_server_response(
+         @common_callbacks,
+        );
+ },
+   broken_hsr3 => sub {
+      $the_csr->handle_server_response(
+         @common_callbacks,
+         setup_needed => sub { 'dontcare'; },
+         biteme => sub { 'dontcare'; },
+        );
+ },
+   broken_hsr4 => sub {
+      $the_csr->handle_server_response(
+         @common_callbacks,
+         setup_required => sub { 'dontcare'; },
+         biteme => sub { 'dontcare'; },
+        );
+ },
    hsr => sub {
       $the_csr->handle_server_response(
          @common_callbacks,
@@ -138,6 +164,9 @@ sub try {
     return $the_log;
 }
 
+sub trydie {
+   return eval { try(@_) or 'hmm'; } || $@;
+}
 # for my $m (@messages) {
 #     for my $vm (undef,'1.0','1.1','2.0') {
 #         for my $v2c (undef, 2) {
@@ -153,6 +182,11 @@ sub try {
 #         }
 #     }
 # }
+
+like(trydie('broken_hsr1','immed_fail_1',undef,undef),qr/^Cannot have both setup_needed and setup_required/);
+like(trydie('broken_hsr2','immed_fail_1',undef,undef),qr/^No setup_needed callback/);
+like(trydie('broken_hsr3','immed_fail_1',undef,undef),qr/^Unknown callbacks: *biteme/,'with setup_needed');
+like(trydie('broken_hsr4','immed_fail_1',undef,undef),qr/^Unknown callbacks: *biteme/,'with setup_required');
 
 is(try(    'hsr',  'immed_fail_1',undef,undef),'!IMM(http://setup.com)');
 is(try('hsr_old',  'immed_fail_1',undef,undef),'!IMM(http://setup.com)');
