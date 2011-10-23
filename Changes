@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+1.030099_006 Oct 22 2011
+
     * In OpenID 2.0, the correct way to handle failure of a
       checkid_immediate mode request is to retry the same request
       again in checkid_setup mode.  user_setup_url is not supposed to
