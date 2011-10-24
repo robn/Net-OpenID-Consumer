@@ -82,7 +82,7 @@ our %fake_cache = ();
 
 sub _my_fetch {
     my ($class, $uri, $consumer, $content_hook, $prefix) = @_;
-
+    $prefix ||= '';
     # keep behavior of actual URI::Fetch->fetch()
     if ($uri eq 'x-xrds-location') {
         Carp::confess("Buh?");
