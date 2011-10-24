@@ -927,31 +927,47 @@ sub verified_identity {
         $self->_debug("verified_identity: verifying using HTTP (dumb mode)");
         # didn't find an association.  have to do dumb consumer mode
         # and check it with a POST
-        my %post = (
-                    "openid.mode"         => "check_authentication",
-                    "openid.assoc_handle" => $assoc_handle,
-                    "openid.signed"       => $signed,
-                    "openid.sig"          => $sig64,
+        my %post;
+        my @mkeys;
+        if ($self->_message_version >= 2
+            && (@mkeys = $self->message->all_parameters)) {
+            # OpenID 2.0: copy *EVERYTHING*, not just signed parameters.
+            # (XXX:  Do we need to copy non "openid." parameters as well?
+            #  For now, assume if provider is sending them, there is a reason)
+            %post = map {$_ eq 'openid.mode' ? () : ($_, $self->args($_)) } @mkeys;
+        }
+        else {
+            # OpenID 1.1 *OR* legacy client did not provide a proper
+            # enumerator; in the latter case under 2.0 we have no
+            # choice but to send a partial (1.1-style)
+            # check_authentication request and hope for the best.
+
+            %post = (
+                     "openid.assoc_handle" => $assoc_handle,
+                     "openid.signed"       => $signed,
+                     "openid.sig"          => $sig64,
                     );
 
-        if ($self->_message_version >= 2) {
-            $post{'openid.ns'} = OpenID::util::VERSION_2_NAMESPACE();
-        }
+            if ($self->_message_version >= 2) {
+                $post{'openid.ns'} = OpenID::util::VERSION_2_NAMESPACE();
+            }
 
-        # and copy in all signed parameters that we don't already have into %post
-        foreach my $param (split(/,/, $signed)) {
-            next unless $param =~ /^[\w\.]+$/;
-            my $val = $self->args('openid.'.$param);
-            $signed_fields{$param} = $val;
-            next if $post{"openid.$param"};
-            $post{"openid.$param"} = $val;
-        }
+            # and copy in all signed parameters that we don't already have into %post
+            foreach my $param (split(/,/, $signed)) {
+                next unless $param =~ /^[\w\.]+$/;
+                my $val = $self->args('openid.'.$param);
+                $signed_fields{$param} = $val;
+                next if $post{"openid.$param"};
+                $post{"openid.$param"} = $val;
+            }
 
-        # if the server told us our handle as bogus, let's ask in our
-        # check_authentication mode whether that's true
-        if (my $ih = $self->message("invalidate_handle")) {
-            $post{"openid.invalidate_handle"} = $ih;
+            # if the server told us our handle as bogus, let's ask in our
+            # check_authentication mode whether that's true
+            if (my $ih = $self->message("invalidate_handle")) {
+                $post{"openid.invalidate_handle"} = $ih;
+            }
         }
+        $post{"openid.mode"} = "check_authentication";
 
         my $req = HTTP::Request->new(POST => $server);
         $req->header("Content-Type" => "application/x-www-form-urlencoded");
@@ -960,8 +976,8 @@ sub verified_identity {
         my $ua  = $self->ua;
         my $res = $ua->request($req);
 
-        # uh, some failure, let's go into dumb mode?
-        return $self->_fail("naive_verify_failed_network") unless $res && $res->is_success;
+        return $self->_fail("naive_verify_failed_network")
+          unless $res && $res->is_success;
 
         my $content = $res->content;
         my %args = OpenID::util::parse_keyvalue($content);
@@ -1222,13 +1238,17 @@ Can be used in 1 of 3 ways:
 
 $csr->args( $reference )
 
-Where $reference is either a HASH ref, CODE ref, Apache $r,
-Apache::Request $apreq, or CGI.pm $cgi.  If a CODE ref, the subref
-must return the value given one argument (the parameter to retrieve)
+Where $reference is either a HASH ref, a CODE ref, or a "request object".
+Currently recognized request objects include Apache, Apache::Request,
+Apache2::Request, Plack::Request, and CGI.
 
-If you pass in an Apache $r object, you must not have already called
-$r->content as the consumer module will want to get the request
-arguments out of here in the case of a POST request.
+If you pass in a CODE ref, it must, if given a single URL parameter
+name argument, return that parameter value B<and>, if given no arguments
+at all, return the full list of parameter names from the request.
+
+If you pass in an Apache (Apache 1 RequestRec) object, you must not
+have already called $r->content as the consumer module will want to
+get the request arguments out of here in the case of a POST request.
 
 2. Get a parameter:
 

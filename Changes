@@ -1,5 +1,19 @@
 {{$NEXT}}
 
+    * API change:
+      In Consumer->args(CODEREF), CODEREF now needs to be able to also
+      take 0 arguments and return a list of all parameters in the request
+
+      Enumeration is required for check_authentication in OpenID 2.0
+      to work properly -- if the list isn't available then we revert
+      to OpenID 1.1 behavior of only sending the signed parameters and
+      hope for the best, but be warned that some providers may reject
+      this.
+
+      This is not a problem if args() is being passed an unblessed hash
+      or some variety of request object (CGI, Apache, Apache2::Request,
+      etc...)
+
 1.030099_006 Oct 22 2011
 
     * In OpenID 2.0, the correct way to handle failure of a
