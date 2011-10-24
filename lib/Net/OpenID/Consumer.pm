@@ -37,6 +37,7 @@ use LWP::UserAgent;
 use Storable;
 use JSON qw(encode_json);
 use URI::Escape qw(uri_escape);
+use HTML::Parser;
 
 sub new {
     my Net::OpenID::Consumer $self = shift;
@@ -290,59 +291,78 @@ sub _get_url_contents {
 }
 
 ##########################################################
-#### bogus HTML parsing code that is about to go away ####
 
-my $_decode_entities_map =
-  {
-   'lt' => '<',
-   'gt' => '>',
-   'quot' => '"',
-   'amp' => '&',
-  };
+our @linkmeta_parser_options =
+  (
+   api_version => 3,
+   ignore_elements => [qw(script style base isindex command noscript title object)],
 
-sub _decode_entities {
-    my $value = shift;
-    return unless defined $value;
-    $value =~ s/&(\w+);/$_decode_entities_map->{$1} || ""/eg;
-    return $value;
-}
+   # this is basically a stripped-down version of HTML::HeadParser
+   start_document_h
+   => [sub {
+           my($p) = @_;
+           undef $p->{first_chunk};
+           $p->{linkmetas} = [];
+       },
+       "self"],
 
-sub _element_attributes {
-    local $_ = shift;
-    my %a = ();
-    while (m!\G[[:space:]]+([^[:space:]=]+)(?:=(?:([-a-zA-Z0-9._:]+)|'([^\']+)'|"([^\"]+)")([^[:space:]]*))?!g) {
-        next if $5; # skip malformed attributes
-        my $v = (defined $2 ? $2 : defined $3 ? $3 : $4);
-        $a{lc($1)} = _decode_entities($v) if defined $v;
-    }
-    return \%a;
-}
+   end_h
+   => [sub {
+           my($p,$tag) = @_;
+           $p->eof if $tag eq 'head'
+       },
+       "self,tagname"],
 
+   start_h
+   => [sub {
+           my($p, $tag, $lm) = @_;
+           if ($tag eq 'link' || $tag eq 'meta') {
+               $lm->{' tag'} = $tag;
+               if ($tag eq 'link' && (($lm->{rel}||'') =~ m/\s/)) {
+                   # split <link rel="foo bar..." href="whatever"... /> into multiple <link>s
+                   push @{$p->{linkmetas}}, map { +{%{$lm}, rel => $_} } split /\s+/,$lm->{rel};
+               }
+               else {
+                   push @{$p->{linkmetas}}, $lm;
+               }
+           }
+           elsif ($tag ne 'head' && $tag ne 'html') {
+               # stop parsing
+               $p->eof;
+           }
+       },
+       "self,tagname,attr"],
+
+   text_h
+   => [sub {
+           my($p, $text) = @_;
+           unless ($p->{first_chunk}) {
+               # drop Unicode BOM if found
+               if ($p->utf8_mode) {
+                   $text =~ s/^\xEF\xBB\xBF//;
+               }
+               else {
+                   $text =~ s/^\x{FEFF}//;
+               }
+               $p->{first_chunk}++;
+           }
+           $p->eof if ($text =~ /\S/);
+           # Normal text outside of an ignored tag
+           # means start of body
+       },
+       "self,text"],
+  );
+#  *utf8_mode = sub { 1 } unless HTML::Entities::UNICODE_SUPPORT;;
+
+my $_parser;
 sub _extract_linkmetas {
     my $doc = shift;
-    OpenID::util::_extract_head_markup_only(\$doc);
-
-    return []  # was $self->_fail("no_head_tag")
-      unless ($doc||'') =~ m!<head[^>]*>(.*?)</head>!is;
-    my $head = $1;
-
-    my @linkmetas = ();
-    while ($head =~ m!<(link|meta)([[:space:]][^>]*?)/?>!ig) {
-        my $tag = lc($1);
-        my $lm = _element_attributes($2);
-        $lm->{' tag'} = $tag;
-        if ($tag eq 'link' && (($lm->{rel}||'') =~ m/[[:space:]]/)) {
-            # split <link rel="foo bar..." href="whatever"... /> into multiple <link>s
-            push @linkmetas, map { +{%{$lm}, rel => $_} } split /[[:space:]]+/,$lm->{rel};
-        }
-        else {
-            push @linkmetas, $lm;
-        }
-    }
-    return \@linkmetas;
+    $_parser ||= HTML::Parser->new(@linkmeta_parser_options);
+    $_parser->parse($doc);
+    $_parser->eof;
+    return $_parser->{linkmetas};
 }
 
-#### end bogus HTML parsing code that is about to go away ####
 ##############################################################
 
 

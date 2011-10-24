@@ -115,14 +115,11 @@ is_deeply($csr->_find_semantic_info($uri5), $answer5,'link with two refs in it(a
 addf_uri($uri5,content => 'randomness');
 is_deeply($csr->_find_semantic_info($uri5), $answer5,'link with two refs in it(yet again)');
 
-TODO: {
-  local $TODO = 'Need to finish HTML::Parser version';
-
 my $uri4b = 'http://openid.aol.com/oldstyle4b';
 addf_uri($uri4b,content => <<END );
 <HTML><HEAD>
 <LINK REL=xopenid.serverx HREF="not it" />
-<LINK REL=openid.delegate HREF="http://op&#65;nid1.net/deleg&#61;te?x=1&amp;y=2&amp;z=3"></HEAD>
+<LINK REL=openid.delegate HREF="http://op&#x65;nid1.net/deleg&#97;te?x=1&amp;y=2&amp;z=3"></HEAD>
 <BODY><head><LINK REL=openid2.provider HREF="not it either"></head></BODY></HTML>
 END
 is_deeply($csr->_find_semantic_info($uri4b),
@@ -140,10 +137,9 @@ rel=openid2.provider href="http://bogous.example.net"></head>'>
   <input type=submit>
   </form>
 END
-is_deeply($csr->_find_semantic_info($uri5),
+is_deeply($csr->_find_semantic_info($uri6),
 {
 'openid2.provider' => 'http://openid.example.com/~user',
 },'headless injection example');
 
-}
 1;
