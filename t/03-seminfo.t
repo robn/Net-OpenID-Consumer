@@ -2,7 +2,7 @@
 
 use warnings;
 use strict;
-use Test::More tests => 5;
+use Test::More tests => 10;
 use Net::OpenID::Consumer;
 
 use lib 't/lib';
@@ -90,16 +90,60 @@ END
 is_deeply($csr->_find_semantic_info($uri4),
 {'openid.delegate'=>'http://openid1.net/delegate'},'HTML 4.0- test');
 
+my $uri4a = 'http://openid.aol.com/oldstyle2';
+addf_uri($uri4a,content => <<END );
+<HTML><HEAD>
+<LINK REL=xopenid.serverx HREF="not it" />
+<LINK REL=openid.delegate HREF="http://openid1.net/delegate?x=1&amp;y=2&amp;z=3"></HEAD>
+<BODY><head><LINK REL=openid2.provider HREF="not it either"></head></BODY></HTML>
+END
+is_deeply($csr->_find_semantic_info($uri4a),
+{'openid.delegate'=>'http://openid1.net/delegate?x=1&y=2&z=3'},'HTML 4.0- test');
+
 my $uri5 = 'http://google.com/somewhere';
 addf_uri($uri5,content => <<END );
 <html>
 <head> <meta http-equiv="content-type" content="text/html; charset=utf-8"/> <title> OpenID for Google Accounts </title> <link rel="openid2.provider openid.server" href="http://openid-provider.appspot.com/joey%40kitenet.net" /> <link href="/static/base.css" rel="stylesheet" type="text/css"/> 
 </head><body>bye</body></html>
 END
-is_deeply($csr->_find_semantic_info($uri5),
+my $answer5 = 
 {'openid2.provider'=>'http://openid-provider.appspot.com/joey%40kitenet.net',
  'openid.server'=>'http://openid-provider.appspot.com/joey%40kitenet.net'
-},'link with two refs in it');
+};
+is_deeply($csr->_find_semantic_info($uri5), $answer5,'link with two refs in it');
+is_deeply($csr->_find_semantic_info($uri5), $answer5,'link with two refs in it(again)');
+addf_uri($uri5,content => 'randomness');
+is_deeply($csr->_find_semantic_info($uri5), $answer5,'link with two refs in it(yet again)');
 
+TODO: {
+  local $TODO = 'Need to finish HTML::Parser version';
 
+my $uri4b = 'http://openid.aol.com/oldstyle4b';
+addf_uri($uri4b,content => <<END );
+<HTML><HEAD>
+<LINK REL=xopenid.serverx HREF="not it" />
+<LINK REL=openid.delegate HREF="http://op&#65;nid1.net/deleg&#61;te?x=1&amp;y=2&amp;z=3"></HEAD>
+<BODY><head><LINK REL=openid2.provider HREF="not it either"></head></BODY></HTML>
+END
+is_deeply($csr->_find_semantic_info($uri4b),
+{'openid.delegate'=>'http://openid1.net/delegate?x=1&y=2&z=3'},'numerical entities');
+
+my $uri6 = 'http://google.com/somewhere6';
+addf_uri($uri6,content => <<END );
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01//EN">
+  <link rel=openid2.provider href='http://openid.example.com/~user'>
+  <title>Nice test</title>
+  <form action="doit">
+  <p>Send me your comment:
+  <input type=text name=comment value='<html><head><link
+rel=openid2.provider href="http://bogous.example.net"></head>'>
+  <input type=submit>
+  </form>
+END
+is_deeply($csr->_find_semantic_info($uri5),
+{
+'openid2.provider' => 'http://openid.example.com/~user',
+},'headless injection example');
+
+}
 1;

@@ -78,13 +78,27 @@ sub addf_ure {
     addf_h(ure => $ure, @_);
 }
 
+our %fake_cache = ();
+
 sub _my_fetch {
-    my ($class, $uri, $consumer, $content_hook) = @_;
+    my ($class, $uri, $consumer, $content_hook, $prefix) = @_;
 
     # keep behavior of actual URI::Fetch->fetch()
     if ($uri eq 'x-xrds-location') {
         Carp::confess("Buh?");
     }
+
+    my $cache_key = "URIFetch:${prefix}:${uri}";
+    if (my $blob = $fake_cache{$cache_key}) {
+        my $ref = Storable::thaw($blob);
+        return Net::OpenID::URIFetch::Response->new(
+            status => 200,
+            content => $ref->{Content},
+            headers => $ref->{Headers},
+            final_uri => $ref->{FinalURI},
+        );
+    }
+
 
     # pretend to get $uri
     # $req = HTTP::Request->new(GET => $uri);
@@ -105,10 +119,24 @@ sub _my_fetch {
 	    $headers->{$k} = $f->{$k};
 	}
 
+        my $final_uri = $f->{final_uri} || $uri;
+        if ($f->{code} == 200) {
+            my $cache_data = {
+                Headers => $headers,
+                Content => $content,
+                FinalURI => $final_uri,
+                CacheTime => time(),
+            };
+            my $cache_blob = Storable::freeze($cache_data);
+            my $final_cache_key = "URIFetch:${prefix}:${final_uri}";
+            $fake_cache{$final_cache_key} = $cache_blob;
+            $fake_cache{$cache_key} = $cache_blob;
+        }
+
 	return Net::OpenID::URIFetch::Response->new
 	  (
 	   status => $f->{code},
-	   final_uri => $f->{final_uri} || $uri,
+	   final_uri => $final_uri,
 	   content => $content,
 	   headers => $headers,
 	  );

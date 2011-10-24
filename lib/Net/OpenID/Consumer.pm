@@ -274,16 +274,37 @@ sub errtext {
     $self->{last_errtext};
 }
 
+# make sure you change the $prefix every time you change the $hook format
+# so that when user installs a new version and the old cache server is
+# still running the old cache entries won't confuse things.
 sub _get_url_contents {
     my Net::OpenID::Consumer $self = shift;
-    my ($url, $final_url_ref, $hook) = @_;
+    my ($url, $final_url_ref, $hook, $prefix) = @_;
     $final_url_ref ||= do { my $dummy; \$dummy; };
 
-    my $res = Net::OpenID::URIFetch->fetch($url, $self, $hook);
+    my $res = Net::OpenID::URIFetch->fetch($url, $self, $hook, $prefix);
 
     $$final_url_ref = $res->final_uri;
 
     return $res ? $res->content : undef;
+}
+
+##########################################################
+#### bogus HTML parsing code that is about to go away ####
+
+my $_decode_entities_map =
+  {
+   'lt' => '<',
+   'gt' => '>',
+   'quot' => '"',
+   'amp' => '&',
+  };
+
+sub _decode_entities {
+    my $value = shift;
+    return unless defined $value;
+    $value =~ s/&(\w+);/$_decode_entities_map->{$1} || ""/eg;
+    return $value;
 }
 
 sub _element_attributes {
@@ -292,10 +313,39 @@ sub _element_attributes {
     while (m!\G[[:space:]]+([^[:space:]=]+)(?:=(?:([-a-zA-Z0-9._:]+)|'([^\']+)'|"([^\"]+)")([^[:space:]]*))?!g) {
         next if $5; # skip malformed attributes
         my $v = (defined $2 ? $2 : defined $3 ? $3 : $4);
-        $a{lc($1)} = $v if defined $v;
+        $a{lc($1)} = _decode_entities($v) if defined $v;
     }
     return \%a;
 }
+
+sub _extract_linkmetas {
+    my $doc = shift;
+    OpenID::util::_extract_head_markup_only(\$doc);
+
+    return []  # was $self->_fail("no_head_tag")
+      unless ($doc||'') =~ m!<head[^>]*>(.*?)</head>!is;
+    my $head = $1;
+
+    my @linkmetas = ();
+    while ($head =~ m!<(link|meta)([[:space:]][^>]*?)/?>!ig) {
+        my $tag = lc($1);
+        my $lm = _element_attributes($2);
+        $lm->{' tag'} = $tag;
+        if ($tag eq 'link' && (($lm->{rel}||'') =~ m/[[:space:]]/)) {
+            # split <link rel="foo bar..." href="whatever"... /> into multiple <link>s
+            push @linkmetas, map { +{%{$lm}, rel => $_} } split /[[:space:]]+/,$lm->{rel};
+        }
+        else {
+            push @linkmetas, $lm;
+        }
+    }
+    return \@linkmetas;
+}
+
+#### end bogus HTML parsing code that is about to go away ####
+##############################################################
+
+
 
 # List of head elements that matter for HTTP discovery.
 # Each entry defines a key for the _find_semantic_info hash
@@ -356,34 +406,11 @@ our @HTTP_discovery_link_meta_tags =
    [qw(atom  link  href  alternate;application/atom+xml), [qw(rel type)]],
   );
 
-sub _find_semantic_info {
-    my Net::OpenID::Consumer $self = shift;
-    my $url = shift;
-    my $final_url_ref = shift;
+sub _document_to_semantic_info_hash_hook {
+    my $docref = shift;
+    my $info = {};
 
-    my $doc = $self->_get_url_contents($url, $final_url_ref, \&OpenID::util::_extract_head_markup_only) || '';
-
-    return $self->_fail("no_head_tag")
-        unless $doc =~ m!<head[^>]*>(.*?)</head>!is;
-    my $head = $1;
-
-    my $ret = {};
-
-    # analyze link/meta tags
-    my @linkmetas = ();
-    while ($head =~ m!<(link|meta)([[:space:]][^>]*?)/?>!ig) {
-        my $tag = lc($1);
-        my $lm = _element_attributes($2);
-        $lm->{' tag'} = $tag;
-        if ($tag eq 'link' && (($lm->{rel}||'') =~ m/[[:space:]]/)) {
-            # split <link rel="foo bar..." href="whatever"... /> into multiple <link>s
-            push @linkmetas, map { +{%{$lm}, rel => $_} } split /[[:space:]]+/,$lm->{rel};
-        }
-        else {
-            push @linkmetas, $lm;
-        }
-    }
-    for my $lm (@linkmetas) {
+    for my $lm (@{_extract_linkmetas($$docref)}) {
         for (@HTTP_discovery_link_meta_tags) {
             my ($target, $elt, $vattrib, $string, $attribs) = @$_;
             next if $elt ne $lm->{' tag'};
@@ -392,26 +419,23 @@ sub _find_semantic_info {
             $attribs ||= [$elt eq 'meta' ? 'name' : 'rel'];
             next if $string ne join ';', map {lc($lm->{$_})} @$attribs;
 
-            $ret->{$target} = $lm->{$vattrib};
+            $info->{$target} = $lm->{$vattrib};
             last;
         }
     }
+    $$docref = $info;
+}
 
-    # map the 4 entities that the spec asks for
-    my $emap = {
-        'lt' => '<',
-        'gt' => '>',
-        'quot' => '"',
-        'amp' => '&',
-    };
-    foreach my $k (keys %$ret) {
-        next unless $ret->{$k};
-        $ret->{$k} =~ s/&(\w+);/$emap->{$1} || ""/eg;
-    }
+sub _find_semantic_info {
+    my Net::OpenID::Consumer $self = shift;
+    my $url = shift;
+    my $final_url_ref = shift;
 
-    $self->_debug("semantic info ($url) = " . join(", ", map { $_.' => '.$ret->{$_} } keys %$ret)) if $self->{debug};
+    my $info = $self->_get_url_contents($url, $final_url_ref, \&_document_to_semantic_info_hash_hook, 'sih');
 
-    return $ret;
+    $self->_debug("semantic info ($url) = " . join(", ", map { $_.' => '.$info->{$_} } keys %$info)) if $self->{debug};
+
+    return $info;
 }
 
 sub _find_openid_server {
