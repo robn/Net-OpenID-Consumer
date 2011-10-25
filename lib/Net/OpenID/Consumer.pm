@@ -290,160 +290,92 @@ sub _get_url_contents {
     return $res ? $res->content : undef;
 }
 
-##########################################################
-
-our @linkmeta_parser_options =
-  (
-   api_version => 3,
-   ignore_elements => [qw(script style base isindex command noscript title object)],
-
-   # this is basically a stripped-down version of HTML::HeadParser
-   start_document_h
-   => [sub {
-           my($p) = @_;
-           undef $p->{first_chunk};
-           $p->{linkmetas} = [];
-       },
-       "self"],
-
-   end_h
-   => [sub {
-           my($p,$tag) = @_;
-           $p->eof if $tag eq 'head'
-       },
-       "self,tagname"],
-
-   start_h
-   => [sub {
-           my($p, $tag, $lm) = @_;
-           if ($tag eq 'link' || $tag eq 'meta') {
-               $lm->{' tag'} = $tag;
-               if ($tag eq 'link' && (($lm->{rel}||'') =~ m/\s/)) {
-                   # split <link rel="foo bar..." href="whatever"... /> into multiple <link>s
-                   push @{$p->{linkmetas}}, map { +{%{$lm}, rel => $_} } split /\s+/,$lm->{rel};
-               }
-               else {
-                   push @{$p->{linkmetas}}, $lm;
-               }
-           }
-           elsif ($tag ne 'head' && $tag ne 'html') {
-               # stop parsing
-               $p->eof;
-           }
-       },
-       "self,tagname,attr"],
-
-   text_h
-   => [sub {
-           my($p, $text) = @_;
-           unless ($p->{first_chunk}) {
-               # drop Unicode BOM if found
-               if ($p->utf8_mode) {
-                   $text =~ s/^\xEF\xBB\xBF//;
-               }
-               else {
-                   $text =~ s/^\x{FEFF}//;
-               }
-               $p->{first_chunk}++;
-           }
-           $p->eof if ($text =~ /\S/);
-           # Normal text outside of an ignored tag
-           # means start of body
-       },
-       "self,text"],
-  );
-#  *utf8_mode = sub { 1 } unless HTML::Entities::UNICODE_SUPPORT;;
-
-my $_parser;
-sub _extract_linkmetas {
-    my $doc = shift;
-    $_parser ||= HTML::Parser->new(@linkmeta_parser_options);
-    $_parser->parse($doc);
-    $_parser->eof;
-    return $_parser->{linkmetas};
-}
-
-##############################################################
-
-
 
 # List of head elements that matter for HTTP discovery.
-# Each entry defines a key for the _find_semantic_info hash
+# Each entry defines a key+value that will appear in the
+# _find_semantic_info hash if the specified element exists
 #  [
-#    KEY         -- key name
-#    ELEMENT     -- html element name, must be 'link' or 'meta'
-#    ATTR        -- html attribute name (where key value lives)
-#    MATCH_VALUE -- string (default = KEY)
-#    MATCH_ATTRS -- list-ref of html attribute names
-#            default = ['rel']  if ELEMENT is <link...>
-#            default = ['name'] if ELEMENT is <meta...>
+#    FSI_KEY    -- key name
+#    TAG_NAME   -- must be 'link' or 'meta'
+#
+#    ELT_VALUES -- string (default = FSI_KEY)
+#            what join(';',values of ELT_KEYS) has to match
+#            in order for a given html element to provide
+#            the value for FSI_KEY
+#
+#    ELT_KEYS   -- list-ref of html attribute names
+#            default = ['rel']  for <link...>
+#            default = ['name'] for <meta...>
+#
+#    FSI_VALUE  -- name of html attribute where value lives
+#            default = 'href'    for <link...>
+#            default = 'content' for <meta...>
 #  ]
-#  _find_semantic_info->{KEY} =
-#    ATTR value of the ELEMENT for which
-#    MATCH_VALUE == ;-join of MATCH_ATTRS values
 #
 our @HTTP_discovery_link_meta_tags =
-  (
+  map {
+      my ($fsi_key, $tag, $elt_value, $elt_keys, $fsi_value) = @{$_};
+      [$fsi_key, $tag,
+       $elt_value || $fsi_key,
+       $elt_keys  || [$tag eq 'link' ? 'rel'  : 'name'],
+       $fsi_value || ($tag eq 'link' ? 'href' : 'content'),
+      ]
+  }
    # OpenID servers / delegated identities
    # <link rel="openid.server"
    #       href="http://www.livejournal.com/misc/openid.bml" />
    # <link rel="openid.delegate"
    #       href="whatever" />
    #
-   [qw(openid.server    link  href)], # 'openid.server'==.rel (<link> default)
-   [qw(openid.delegate  link  href)],
+   [qw(openid.server    link)], # 'openid.server' => ['rel'], 'href'
+   [qw(openid.delegate  link)],
 
    # OpenID2 providers / local identifiers
    # <link rel="openid2.provider"
    #       href="http://www.livejournal.com/misc/openid.bml" />
    # <link rel="openid2.local_id" href="whatever" />
    #
-   [qw(openid2.provider  link  href)],
-   [qw(openid2.local_id  link  href)],
+   [qw(openid2.provider  link)],
+   [qw(openid2.local_id  link)],
 
    # FOAF maker info
    # <meta name="foaf:maker"
    #  content="foaf:mbox_sha1sum '4caa1d6f6203d21705a00a7aca86203e82a9cf7a'"/>
    #
-   [qw(foaf.maker  meta content foaf:maker)], # == .name  (<meta> default)
+   [qw(foaf.maker  meta  foaf:maker)], # == .name
 
    # FOAF documents
    # <link rel="meta" type="application/rdf+xml" title="FOAF"
    #       href="http://brad.livejournal.com/data/foaf" />
    #
-   [qw(foaf  link  href  meta;foaf;application/rdf+xml),  [qw(rel title type)]],
+   [qw(foaf link), 'meta;foaf;application/rdf+xml' => [qw(rel title type)]],
 
    # RSS
    # <link rel="alternate" type="application/rss+xml" title="RSS"
    #       href="http://www.livejournal.com/~brad/data/rss" />
    #
-   [qw(rss   link  href  alternate;application/rss+xml),  [qw(rel type)]],
+   [qw(rss link), 'alternate;application/rss+xml' => [qw(rel type)]],
 
    # Atom
    # <link rel="alternate" type="application/atom+xml" title="Atom"
    #       href="http://www.livejournal.com/~brad/data/rss" />
    #
-   [qw(atom  link  href  alternate;application/atom+xml), [qw(rel type)]],
-  );
+   [qw(atom link), 'alternate;application/atom+xml' => [qw(rel type)]],
+  ;
 
-sub _document_to_semantic_info_hash_hook {
-    my $docref = shift;
+sub _document_to_semantic_info {
+    my $doc = shift;
     my $info = {};
 
-    for my $lm (@{_extract_linkmetas($$docref)}) {
-        for (@HTTP_discovery_link_meta_tags) {
-            my ($target, $elt, $vattrib, $string, $attribs) = @$_;
-            next if $elt ne $lm->{' tag'};
-
-            $string  ||= $target;
-            $attribs ||= [$elt eq 'meta' ? 'name' : 'rel'];
-            next if $string ne join ';', map {lc($lm->{$_})} @$attribs;
-
-            $info->{$target} = $lm->{$vattrib};
-            last;
+    my $elts = OpenID::util::html_extract_linkmetas($doc);
+    for (@HTTP_discovery_link_meta_tags) {
+        my ($key, $tag, $string, $attribs, $vattrib) = @$_;
+        for my $lm (@{$elts->{$tag}}) {
+            $info->{$key} = $lm->{$vattrib}
+              if $string eq join ';', map {lc($lm->{$_})} @$attribs;
         }
     }
-    $$docref = $info;
+    return $info;
 }
 
 sub _find_semantic_info {
@@ -451,8 +383,8 @@ sub _find_semantic_info {
     my $url = shift;
     my $final_url_ref = shift;
 
-    my $info = $self->_get_url_contents($url, $final_url_ref, \&_document_to_semantic_info_hash_hook, 'sih');
-
+    my $doc = $self->_get_url_contents($url, $final_url_ref);
+    my $info = _document_to_semantic_info($doc);
     $self->_debug("semantic info ($url) = " . join(", ", map { $_.' => '.$info->{$_} } keys %$info)) if $self->{debug};
 
     return $info;
