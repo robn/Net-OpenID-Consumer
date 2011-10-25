@@ -1,53 +1,60 @@
 {{$NEXT}}
 
-    * API change:
-      In Consumer->args(CODEREF), CODEREF now needs to be able to also
-      take 0 arguments and return a list of all parameters in the request
+  ---------------
+  ==> API CHANGE:  Consumer->args(CODEREF)
 
-      Enumeration is required for check_authentication in OpenID 2.0
-      to work properly -- if the list isn't available then we revert
+      CODEREF now needs to be able to also take zero arguments and
+      return a list of all URL parameters in the request.
+
+      No change is needed for the other argument types
+      (i.e., unblessed hash or CGI/Apache/etc request object)
+
+      (Enumeration is required for check_authentication in OpenID 2.0
+      to work properly -- if the list isn't available then we can revert
       to OpenID 1.1 behavior of only sending the signed parameters and
       hope for the best, but be warned that some providers may reject
-      this.
+      this.)
 
-      This is not a problem if args() is being passed an unblessed hash
-      or some variety of request object (CGI, Apache, Apache2::Request,
-      etc...)
+  ---------------
+
+    * HTML parsing routines now reside in Net::OpenID::Common (1.12
+      required) which has itself been upgraded to using HTML::Parser.
 
 1.030099_006 Oct 22 2011
 
-    * In OpenID 2.0, the correct way to handle failure of a
+  ---------------
+  ==> API CHANGE:  Consumer->handle_server_response()
+
+      The 'setup_required' callback is now DEPRECATED but still
+      recognized for now for the sake of legacy code.  It may be
+      removed in a future release.
+
+      Use 'setup_needed' instead.  This callback
+        (1) is invoked in ALL cases where a checkid_immediate mode
+            request fails, including those where user_setup_url
+            is not supplied, and
+        (2) is NOT supplied a user_setup_url parameter
+            (you can still use Consumer->user_setup_url as needed)
+
+      Note that in OpenID 2.0, the correct way to handle failure of a
       checkid_immediate mode request is to retry the same request
-      again in checkid_setup mode.  user_setup_url is not supposed to
-      be used AT ALL.
+      again in checkid_setup mode.  user_setup_url is generally not
+      meaningful in OpenID 2.0 and therefore CANNOT be relied upon.
 
-      This entails two API changes:
+  ---------------
+  ==> API CHANGE:  Consumer->setup_needed()  [new function]
 
-        + Consumer->handle_server_response()
+      Should be used to test for the failed checkid_immediate case
+      when not using handle_server_response().
 
-          The 'setup_required' callback is now DEPRECATED but retained
-          for now for the sake of legacy code.  It may be removed in a
-          future release.
+      Testing for user_setup_url() having been set is DEPRECATED and
+      will NOT work under OpenID 2.0 since user_setup_url is generally
+      not meaningful in 2.0 (even if some 2.0 providers do in fact
+      supply it).
 
-          The 'setup_needed' callback should be used for new code and to
-          make existing clients work properly with OpenID 2.0 providers.
-          This callback, unlike 'setup_required'
-            (1) is invoked in ALL cases where a checkid_immediate mode
-                request fails, including those where user_setup_url
-                is not supplied, and
-            (2) does NOT take a user_setup_url parameter
+  ---------------
 
-        + Consumer->setup_needed()  [new function]
-
-          should be used to test for the failed checkid_immediate case
-          when not using handle_server_response().
-
-          Testing for user_setup_url() having been set is DEPRECATED and
-          will NOT work under OpenID 2.0 since user_setup_url is generally
-          not meaningful in 2.0 (even if some 2.0 providers do in fact
-          supply it).
-
-    * Handle 2.0 provider 'error' mode responses.
+    * Handle 2.0 provider-specific 'error' mode responses.
       These currently show up in the 'error' callback 
       (errcode == 'provider_error');
 
