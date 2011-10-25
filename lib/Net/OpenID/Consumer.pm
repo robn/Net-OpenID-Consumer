@@ -407,6 +407,7 @@ sub is_server_response {
     return $self->message ? 1 : 0;
 }
 
+my $_warned_about_setup_required = 0;
 sub handle_server_response {
     my Net::OpenID::Consumer $self = shift;
     my %callbacks_in = @_;
@@ -427,6 +428,15 @@ sub handle_server_response {
                 ? "Cannot have both setup_needed and setup_required"
                 : "No setup_needed callback")
         unless $found_setup_callback == 1;
+
+    if (warnings::enabled('deprecated') &&
+        $callbacks{setup_required} &&
+        !$_warned_about_setup_required++
+       ) {
+        warnings::warn
+            ("deprecated",
+             "'setup_required' callback is deprecated, use 'setup_needed'");
+    }
 
     Carp::croak("Unknown callbacks:  ".join(',', keys %callbacks_in))
         if %callbacks_in;
