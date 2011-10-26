@@ -369,10 +369,10 @@ sub _document_to_semantic_info {
 
     my $elts = OpenID::util::html_extract_linkmetas($doc);
     for (@HTTP_discovery_link_meta_tags) {
-        my ($key, $tag, $string, $attribs, $vattrib) = @$_;
+        my ($key, $tag, $elt_value, $elt_keys, $vattrib) = @$_;
         for my $lm (@{$elts->{$tag}}) {
             $info->{$key} = $lm->{$vattrib}
-              if $string eq join ';', map {lc($lm->{$_})} @$attribs;
+              if $elt_value eq join ';', map {lc($lm->{$_}||'')} @$elt_keys;
         }
     }
     return $info;
