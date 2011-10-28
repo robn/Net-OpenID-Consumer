@@ -18,7 +18,7 @@ use fields (
     'last_errtext',    # last error code we got
     'debug',           # debug flag or codeblock
     'minimum_version', # The minimum protocol version to support
-    'assoc_options',   # options for establishing server associations
+    'assoc_options',   # options for establishing ID provider associations
 );
 
 use Net::OpenID::ClaimedIdentity;
@@ -321,7 +321,7 @@ our @HTTP_discovery_link_meta_tags =
        $fsi_value || ($tag eq 'link' ? 'href' : 'content'),
       ]
   }
-   # OpenID servers / delegated identities
+   # OpenID providers / delegated identities
    # <link rel="openid.server"
    #       href="http://www.livejournal.com/misc/openid.bml" />
    # <link rel="openid.delegate"
@@ -739,7 +739,7 @@ sub verified_identity {
 
     my $sig64    = $self->message("sig")          or return $self->_fail("no_sig");
 
-    # fix sig if the OpenID auth server failed to properly escape pluses (+) in the sig
+    # fix sig if the OpenID provider failed to properly escape pluses (+) in the sig
     $sig64 =~ s/ /+/g;
 
     my $returnto = $self->message("return_to")    or return $self->_fail("no_return_to");
@@ -768,7 +768,7 @@ sub verified_identity {
     else {
         $real_ident = $self->message("claimed_id") || $a_ident;
 
-        # In version 2, the OP tells us its URL.
+        # In version 2, the OpenID provider tells us its URL.
         $server = $self->message("op_endpoint");
         $possible_endpoints = $self->_discover_acceptable_endpoints($real_ident, force_version => 2);
 
@@ -812,7 +812,7 @@ sub verified_identity {
             $last_error = $_[0];
         };
 
-        # The endpoint_uri must match our $server
+        # The endpoint_uri must match our $server (provider)
         if ($endpoint_uri ne $server) {
             $error->("server_not_allowed");
             next;
@@ -947,7 +947,7 @@ sub verified_identity {
                 $post{"openid.$param"} = $val;
             }
 
-            # if the server told us our handle as bogus, let's ask in our
+            # if the provider told us our handle as bogus, let's ask in our
             # check_authentication mode whether that's true
             if (my $ih = $self->message("invalidate_handle")) {
                 $post{"openid.invalidate_handle"} = $ih;
@@ -1033,7 +1033,7 @@ Net::OpenID::Consumer - Library for consumers of OpenID identities
 
   my $claimed_identity = $csr->claimed_identity("bradfitz.com");
 
-  # now your app has to send them at their identity server's endpoint
+  # now your app has to send them at their identity provider's endpoint
   # to get redirected to either a positive assertion that they own
   # that identity, or where they need to go to login/setup trust/etc.
 
@@ -1043,7 +1043,7 @@ Net::OpenID::Consumer - Library for consumers of OpenID identities
   );
 
   # so you send the user off there, and then they come back to
-  # openid-check.app, then you see what the identity server said.
+  # openid-check.app, then you see what the identity provider said.
 
   # Either use callback-based API (recommended)...
   $csr->handle_server_response(
@@ -1122,14 +1122,16 @@ you're aware of why you should care.
 
 =item $csr->B<cache>
 
-Getter/setter for the optional (but recommended!) cache instance you
-want to use for storing fetched parts of pages.  (identity server
-public keys, and the E<lt>headE<gt> section of user's HTML pages)
+Getter/setter for the cache instance which is used for storing fetched
+HTML or XRDS pages and keys for associations with identity providers.
 
 The $cache object can be anything that has a -E<gt>get($key) and
--E<gt>set($key,$value) methods.  See L<URI::Fetch> for more
-information.  This cache object is just passed to L<URI::Fetch>
-directly.
+-E<gt>set($key,$value[,$expire]) methods.  See L<URI::Fetch> for more
+information.  This cache object is passed to L<URI::Fetch> directly.
+
+Setting a cache instance is not absolutely required,
+But without it, provider associations will not be possible and
+the same pages may be fetched multiple times during discovery.
 
 =item $nos->B<consumer_secret>($scalar)
 
@@ -1170,7 +1172,7 @@ to make this behavior explicit.
 =item $csr->assoc_options
 
 Get or sets the hash of parameters that determine how associations
-with servers will be made.  Available options include
+with identity providers will be made.  Available options include
 
 =over 4
 
@@ -1190,8 +1192,8 @@ This overrides C<session_type> and C<assoc_type>
 
 =item session_no_encrypt_https
 
-(default FALSE) Use an unencrypted session type if server is https
-This overrides C<max_encrypt> if both are set.
+(default FALSE) Use an unencrypted session type if the ID provider
+URL is https:.  This overrides C<max_encrypt> if both are set.
 
 =item allow_eavesdropping
 
@@ -1356,7 +1358,7 @@ in particular even if it is supplied.
 =item $csr->B<user_setup_url>( [ %opts ] )
 
 (Version 1 only) Returns the URL the user must return to in order to
-login, setup trust, or do whatever the identity server needs them to
+login, setup trust, or do whatever the identity provider needs them to
 do in order to make the identity assertion which they previously
 initiated by entering their claimed identity URL.
 
@@ -1375,12 +1377,12 @@ following options in %opts:
 
 =item C<post_grant>
 
-What you're asking the identity server to do with the user after they
+What you're asking the identity provider to do with the user after they
 setup trust.  Can be either C<return> or C<close> to return the user
 back to the return_to URL, or close the browser window with
 JavaScript.  If you don't specify, the behavior is undefined (probably
 the user gets a dead-end page with a link back to the return_to URL).
-In any case, the identity server can do whatever it wants, so don't
+In any case, the identity provider can do whatever it wants, so don't
 depend on this.
 
 =back
@@ -1399,7 +1401,7 @@ parameters that you'd sent along in your return_to URL.
 
 Returns a Net::OpenID::VerifiedIdentity object, or undef.
 Verification includes double-checking the reported identity URL
-declares the identity server, verifying the signature, etc.
+declares the identity provider, verifying the signature, etc.
 
 The options in %opts may contain:
 
