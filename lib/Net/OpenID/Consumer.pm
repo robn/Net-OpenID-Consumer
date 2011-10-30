@@ -533,10 +533,8 @@ sub _discover_acceptable_endpoints {
                 my @sorted_id_servers = sort {
                     my $pa = $a->{priority};
                     my $pb = $b->{priority};
-                    return 0 unless defined($pa) || defined($pb);
-                    return -1 unless defined ($pb);
-                    return 1 unless defined ($pa);
-                    return $a->{priority} <=> $b->{priority}
+                    defined($pb) <=> defined($pa)
+                      || (defined($pa) ? ($pa <=> $pb) : 0)
                 } @$service_uris;
                 $service_uris = \@sorted_id_servers;
             }
