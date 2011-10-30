@@ -69,6 +69,7 @@ sub disable_version_1 {
 sub cache           { &_getset; }
 sub consumer_secret { &_getset; }
 sub required_root   { &_getset; }
+sub assoc_options   { &_hashgetset }
 
 sub _getset {
     my Net::OpenID::Consumer $self = shift;
@@ -83,20 +84,12 @@ sub _getset {
     return $self->{$param};
 }
 
-sub minimum_version {
+sub _hashgetset {
     my Net::OpenID::Consumer $self = shift;
+    my $param = (caller(1))[3];
+    $param =~ s/.+:://;
+    my $check_param = "_canonicalize_$param";
 
-    if (@_) {
-        my $minv = shift;
-        Carp::croak("Too many parameters") if @_;
-        $minv = 1 unless $minv && $minv > 1;
-        $self->{minimum_version} = $minv;
-    }
-    return $self->{minimum_version};
-}
-
-sub assoc_options {
-    my Net::OpenID::Consumer $self = shift;
     my $v;
     if (scalar(@_) == 1) {
         $v = shift;
@@ -113,15 +106,29 @@ sub assoc_options {
         else {
             Carp::croak("single argument must be HASH or ARRAY reference");
         }
-        $self->{assoc_options} = $v;
+        $self->{$param} = $self->$check_param($v);
     }
     elsif (@_) {
         Carp::croak("odd number of parameters?")
             if scalar(@_)%2;
-        $self->{assoc_options} = {@_};
+        $self->{$param} = $self->$check_param({@_});
     }
-    return $self->{assoc_options};
+    return $self->{$param};
 }
+
+sub minimum_version {
+    my Net::OpenID::Consumer $self = shift;
+
+    if (@_) {
+        my $minv = shift;
+        Carp::croak("Too many parameters") if @_;
+        $minv = 1 unless $minv && $minv > 1;
+        $self->{minimum_version} = $minv;
+    }
+    return $self->{minimum_version};
+}
+
+sub _canonicalize_assoc_options { return $_[1]; }
 
 sub _debug {
     my Net::OpenID::Consumer $self = shift;
