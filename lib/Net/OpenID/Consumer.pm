@@ -1109,6 +1109,31 @@ method descriptions below.
 
 =over 4
 
+=item $csr->B<message>($key)
+
+Obtain a value from the message contained in the request arguments
+with the given key. This can only be used to obtain core arguments,
+not extension arguments.
+
+Call this method without a C<$key> argument to get a L<Net::OpenID::IndirectMessage>
+object representing the message.
+
+=item $csr->B<err>
+
+Returns the last error, in form "errcode: errtext"
+
+=item $csr->B<errcode>
+
+Returns the last error code.
+
+=item $csr->B<errtext>
+
+Returns the last error text.
+
+=item $csr->B<json_err>
+
+Returns the last error code/text in JSON format.
+
 =item $csr->B<ua>($user_agent)
 
 =item $csr->B<ua>
@@ -1167,53 +1192,6 @@ In most cases you'll want to allow both 1.1 and 2.0 identifiers,
 which is the default. If you want, you can set this property to 1
 to make this behavior explicit.
 
-=item $csr->assoc_options(...)
-
-=item $csr->assoc_options
-
-Get or sets the hash of parameters that determine how associations
-with identity providers will be made.  Available options include
-
-=over 4
-
-=item assoc_type
-
-Association type, (default 'HMAC-SHA1')
-
-=item session_type
-
-Association session type, (default 'DH-SHA1')
-
-=item max_encrypt
-
-(default FALSE) Use best encryption available for protocol version
-for both session type and association type.
-This overrides C<session_type> and C<assoc_type>
-
-=item session_no_encrypt_https
-
-(default FALSE) Use an unencrypted session type if the ID provider
-URL is https:.  This overrides C<max_encrypt> if both are set.
-
-=item allow_eavesdropping
-
-(default FALSE)  Because it is generally a bad idea, we abort
-assocations where an unencrypted session over a non-SSL
-connection is called for.  However the OpenID 1.1 specification
-technically allows this, so if that is what you really want,
-set this flag true.  Ignored under protocol version 2.
-
-=back
-
-=item $csr->B<message>($key)
-
-Obtain a value from the message contained in the request arguments
-with the given key. This can only be used to obtain core arguments,
-not extension arguments.
-
-Call this method without a C<$key> argument to get a L<Net::OpenID::IndirectMessage>
-object representing the message.
-
 =item $csr->B<args>($ref)
 
 =item $csr->B<args>($param)
@@ -1266,6 +1244,44 @@ can be obtained by their documented namespace URI.
 If provided, this is the required string that all return_to URLs must
 start with.  If it doesn't match, it'll be considered invalid (spoofed
 from another site)
+
+=item $csr->assoc_options(...)
+
+=item $csr->assoc_options
+
+Get or sets the hash of parameters that determine how associations
+with identity providers will be made.  Available options include
+
+=over 4
+
+=item assoc_type
+
+Association type, (default 'HMAC-SHA1')
+
+=item session_type
+
+Association session type, (default 'DH-SHA1')
+
+=item max_encrypt
+
+(default FALSE) Use best encryption available for protocol version
+for both session type and association type.
+This overrides C<session_type> and C<assoc_type>
+
+=item session_no_encrypt_https
+
+(default FALSE) Use an unencrypted session type if the ID provider
+URL is https:.  This overrides C<max_encrypt> if both are set.
+
+=item allow_eavesdropping
+
+(default FALSE)  Because it is generally a bad idea, we abort
+assocations where an unencrypted session over a non-SSL
+connection is called for.  However the OpenID 1.1 specification
+technically allows this, so if that is what you really want,
+set this flag true.  Ignored under protocol version 2.
+
+=back
 
 =item $csr->B<claimed_identity>($url)
 
@@ -1413,22 +1429,6 @@ Sets the required_root just for this request.  Values returns to its
 previous value afterwards.
 
 =back
-
-=item $csr->B<err>
-
-Returns the last error, in form "errcode: errtext"
-
-=item $csr->B<errcode>
-
-Returns the last error code.
-
-=item $csr->B<errtext>
-
-Returns the last error text.
-
-=item $csr->B<json_err>
-
-Returns the last error code/text in JSON format.
 
 =back
 
