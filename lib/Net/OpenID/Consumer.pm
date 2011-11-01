@@ -8,7 +8,8 @@ package Net::OpenID::Consumer;
 
 
 use fields (
-    'cache',           # a Cache object to store HTTP responses and associations
+    'cache',           # Cache object to store HTTP responses,
+                       #   associations, and nonces
     'ua',              # LWP::UserAgent instance to use
     'args',            # how to get at your args
     'message',         # args interpreted as an IndirectMessage, if possible
@@ -19,6 +20,7 @@ use fields (
     'debug',           # debug flag or codeblock
     'minimum_version', # The minimum protocol version to support
     'assoc_options',   # options for establishing ID provider associations
+    'nonce_options',   # options for dealing with nonces
 );
 
 use Net::OpenID::ClaimedIdentity;
@@ -51,6 +53,7 @@ sub new {
     $self->required_root   ( delete $opts{required_root}   );
     $self->minimum_version ( delete $opts{minimum_version} );
     $self->assoc_options   ( delete $opts{assoc_options}   );
+    $self->nonce_options   ( delete $opts{nonce_options}   );
 
     $self->{debug} = delete $opts{debug};
 
@@ -70,6 +73,7 @@ sub cache           { &_getset; }
 sub consumer_secret { &_getset; }
 sub required_root   { &_getset; }
 sub assoc_options   { &_hashgetset }
+sub nonce_options   { &_hashgetset }
 
 sub _getset {
     my Net::OpenID::Consumer $self = shift;
@@ -240,6 +244,11 @@ our %Error_text =
     'time_in_future'              => "Return_to signature is from the future.",
     'unsigned_field'              => sub { "Field(s) must be signed: " . join(", ", @_) },
     'url_fetch_err'               => "Error fetching the provided URL.",
+    'nonce_reused'                => 'Re-used response_nonce; possible replay attempt.',
+    'nonce_stale'                 => 'Stale response_nonce; could have been used before.',
+    'nonce_format'                => 'Bad timestamp format in response_nonce.',
+    'nonce_future'                => 'Provider clock is too far forward.',
+
    );
 
 sub _fail {
@@ -790,8 +799,20 @@ sub verified_identity {
     # check that returnto is for the right host
     return $self->_fail("bogus_return_to") if $rr && $returnto !~ /^\Q$rr\E/;
 
-    # check age/signature of return_to
     my $now = time();
+
+    # check that we have not seen response_nonce before
+    my $response_nonce = $self->message("response_nonce");
+    unless ($response_nonce) {
+        # 1.0/1.1 does not require nonces
+        return $self->_fail("nonce_missing")
+          if $self->_message_version == 2;
+    }
+    else {
+        return unless $self->_nonce_check_succeeds($now, $server, $response_nonce);
+    }
+
+    # check age/signature of return_to
     {
         my ($sig_time, $sig) = split(/\-/, $self->args("oic.time") || "");
         # complain if more than an hour since we sent them off
@@ -1013,6 +1034,122 @@ sub _get_consumer_secret {
     return $sec;
 }
 
+our $nonce_default_delay = 1200;
+our $nonce_default_skew = 300;
+
+sub _canonicalize_nonce_options {
+    my Net::OpenID::Consumer $self = shift;
+    my $o = shift;
+    my ($no_check,$ignore_time,$lifetime,$window,$start,$skew,$timecop) =
+      delete @{$o}{qw(no_check ignore_time lifetime window start skew timecop)};
+    Carp::croak("Unrecognized nonce_options: ".join(',',keys %$o))
+        if keys %$o;
+
+    return +{ no_check => 1 }
+      if ($no_check);
+
+    return +{ window => 0,
+              lifetime => ($lifetime && $lifetime > 0 ? $lifetime : 0),
+            }
+      if ($ignore_time);
+
+    $window =
+      defined($lifetime) ? $lifetime :
+        $nonce_default_delay + 2*(defined($skew) && $skew > $nonce_default_skew
+                                  ? $skew : $nonce_default_skew)
+      unless (defined($window));
+
+    $lifetime = $window
+      unless (defined($lifetime));
+
+    $lifetime = 0 if $lifetime < 0;
+    $window = 0 if $window < 0;
+
+    $skew = $window < 2*$nonce_default_skew ? $window/2 : $nonce_default_skew
+      unless (defined($skew));
+
+    Carp::croak("Unrecognized nonce_options: ".join(',',keys %$o))
+        if keys %$o;
+
+    return
+      +{
+        window => $window,
+        lifetime => $lifetime,
+        skew => $skew,
+        defined($start)  ? (start => $start) : (),
+       };
+}
+
+# The contract:
+#     IF the provider adheres to protocol and is properly configured
+#     which, for our purposes here means
+#       (1) it sends properly formatted nonces
+#           that reflect provider clock time and
+#       (2) provider clock is not skewed from our own by more than
+#           <skew> (the maximum acceptable)
+#     AND
+#       we have a cache that can reliably hold onto entries
+#       for at least <lifetime> seconds
+#     THEN we must not accept a duplicate nonce.
+#
+# Preconditions imply that no message with this nonce will be received
+# prior to <nonce_time>-<skew> (i.e., provider clock is running
+# maximally fast and there is no transmission delay).  If our cache
+# start time is prior to this and the lifetime of cache entries is
+# long enough, then we can know for certain that it's not a duplicate,
+# otherwise we do not and therefore must reject it.
+#
+# If we detect an instance where preconditions do not hold, there is
+# not much we can do: rejecting nonces in this case will not make the
+# protocol more secure.  As long as the provider's clock is skewed too
+# far forward, an attacker will be able to take advantage of it.  Best
+# we can do is issue warnings, which is the point of 'timecop', but if
+# there's no place to send the warnings, then it's a waste of time.
+#
+sub _nonce_check_succeeds {
+    my Net::OpenID::Consumer $self = shift;
+    my ($now, $uri, $nonce) = @_;
+
+    my $o = $self->nonce_options;
+    my $cache = $self->cache;
+    return 1
+      if $o->{no_check} || !$cache;
+
+    my $cache_key = "nonce:$uri:$nonce";
+
+    return $self->_fail('nonce_reused') if ($cache->get($cache_key));
+    $cache->set($cache_key, 1,
+                ($o->{lifetime} ? ($now + $o->{lifetime}) : ()));
+
+    return 1
+      unless $o->{window} || $o->{start};
+
+    # parse RFC3336 timestamp restricted as per 10.1
+    my ($year,$mon,$day,$hour,$min,$sec) =
+      $nonce =~ m/^([0-9]{4})-([0-9]{2})-([0-9]{2})T([0-9]{2}):([0-9]{2}):([0-9]{2})Z/
+      or return $self->_fail('nonce_format');
+
+    # $nonce_time is a lower bound on when the nonce could have been
+    # received according to our clock
+    my $nonce_time = eval { timegm($sec,$min,$hour,$day,$mon-1,$year) - $o->{skew} };
+    return $self->_fail('nonce_format') if $@;
+
+    # nonces from the future indicate misconfigured providers
+    # that we can do nothing about except give warnings
+    return !$o->{timecop} || $self->_fail('nonce_future')
+        if ($now < $nonce_time);
+
+    # the check that matters
+    return $self->_fail('nonce_stale')
+      if   ($o->{window} && $nonce_time < $now - $o->{window})
+        || ($o->{start} && $nonce_time < $o->{start});
+
+    # win
+    return 1;
+}
+
+
+
 1;
 __END__
 
@@ -1185,6 +1322,8 @@ information.  This cache object is passed to L<URI::Fetch|URI::Fetch> directly.
 Setting a cache instance is not absolutely required,
 But without it, provider associations will not be possible and
 the same pages may be fetched multiple times during discovery.
+B<It will also not be possible to check for repetition of the
+response_nonce, which may then leave you open to replay attacks.>
 
 =item $csr->B<consumer_secret>($scalar)
 
@@ -1345,6 +1484,137 @@ so if that is what you really want, set this flag true.
 Ignored under protocol version 2.
 
 =back
+
+=item $csr->B<nonce_options>(...)
+
+=item $csr->B<nonce_options>
+
+Gets or sets the hash of options for how response_nonce should be checked.
+
+In OpenID 2.0, response_nonce is sent by the identity provider as part
+of a positive identity assertion in order to help prevent replay
+attacks.  In the check_authentication phase, the provider is also
+required to not authenticate the same response_nonce twice.
+
+The relying party is strongly encouraged but not required to reject
+multiple occurrences of a nonce (which can matter if associations are
+in use and there is no check_authentication phase).  Relying party may
+also choose to reject a nonce on the basis of the timestamp being out
+of an acceptable range.
+
+Available options include:
+
+=over
+
+=item C<nocheck>
+
+(boolean)
+Skip response_nonce checking entirely.
+This overrides all other nonce_options.
+
+C<nocheck> is implied and is the only possibility if $csr->B<cache> is unset.
+
+=item C<lifetime>
+
+(integer)
+Cache entries for nonces will expire after this many seconds.
+
+Defaults to the value of C<window>, below.
+
+If C<lifetime> is zero or negative, expiration times will not be set
+at all; entries will expire as per the default behavior for your cache
+(or you will need to purge them via some separate process).
+
+If your cache implementation ignores the third argument on
+$entry->B<set>() calls (see L<Cache::Entry>), then this option
+has no effect beyond serving as a default for C<window>.
+
+=item C<ignoretime>
+
+(boolean)
+Do not do any checking of timestamps, i.e., only test whether nonce is in
+the cache.  This overrides all other nonce options except for C<lifetime>
+and C<nocheck>
+
+=item C<skew>
+
+(integer)
+Number of seconds that a provider clock can be ahead of ours before we
+deem it to be misconfigured.
+
+Default skew is 300 (5 minutes) or C<window/2>, if C<window> is
+specified and C<window/2> is smaller.
+
+(C<skew> is treated as 0 if set negative, but don't do that).
+
+Misconfiguration of the provider clock means its timestamps are not
+reliable, which then means there is no way to know whether or not the
+nonce could have been sent before the start of the cache window,
+which nullifies any obligation to detect multiply sent nonces.
+Conversely, if proper configuration can be assumed, then the timestamp
+value minus C<skew> will be the earliest possible time that we could
+have received a previous instance of this response_nonce, and if the
+cache is reliable about holding entries from that time forward, then
+(and only then) can one be certain that this is indeed the first instance.
+
+=item  C<start>
+
+(integer)
+Reject nonces where I<timestamp> minus C<skew> is earlier than C<start>
+(absolute seconds since the epoch; defaults is zero, i.e., midnight 1/1/1970 UTC)
+
+=item  C<window>
+
+(integer)
+Reject nonces where I<timestamp> minus C<skew> is more than C<window>
+seconds ago.  Zero or negative values of C<window> are treated as
+infinite (i.e., allow everything).
+
+If C<lifetime> is specified, C<window> defaults to that.
+If C<lifetime> is not specified, C<window> defaults to 1800 (30 minutes),
+adjusted upwards if C<skew> is specified and larger than the default skew.
+
+Values between 0 and C<skew> (causing all nonces to be rejected) and
+values greater than C<lifetime> (cache will fail to keep some nonces
+that are still within the window) are I<not> recommended.
+
+Ideally, C<window> should be the maximal reasonably expected transmission
+delay plus twice the C<skew>.
+
+=item C<timecop>
+
+(boolean)
+Reject nonces from The Future (i.e., timestamped more than
+C<skew> seconds from now).
+
+C<timecop> is most likely useful only for debugging.  Rejecting future
+nonces is neither required nor does it protect from anything since an
+attacker can retry the message once it has expired from our cache but
+is still within the time interval where we would not yet I<expect>
+that it could expire (this being the core problem with future nonces).
+It may be, however, be useful to have warnings about misconfigured
+provider clocks -- and hence about this insecurity -- at the cost of
+impairing interoperability (since this rejects messages that are
+otherwise allowed by the protocol), hence this option.
+
+=back
+
+In most cases it will be enough to either set C<nocheck> to dispense
+with response_nonce checking entirely because some other (better)
+method of preventing replay attacks (see B<consumer_secret>) has been
+implemented, or use C<lifetime> to declare/set the lifetime of cache
+entries for nonces whether because the default lifetime is
+unsatisfactory or because the cache implementation is incapable of
+setting individual expiration times.  All other options should default
+reasonably in these cases.
+
+Note that in order for the nonce check to be as reliable/secure as
+possible (i.e., block all instances of duplicate nonces from properly
+configured providers as defined by C<skew>, the best we can do),
+C<start> must be no earlier than the cache start time and the cache
+must be guaranteed to hold nonce entries for at least C<lifetime>
+seconds (though, to be sure, C<start> will not matter once your server
+has been running for C<lifetime> seconds).
 
 =back
 
