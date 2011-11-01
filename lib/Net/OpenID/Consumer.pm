@@ -1071,7 +1071,7 @@ Net::OpenID::Consumer - Library for consumers of OpenID identities
   unless ($the_csr->is_server_response) {
       die "Not an OpenID message";
   } elsif ($csr->setup_needed) {
-       # (openID 1) redirect/link/popup user to $self->user_setup_url
+       # (openID 1) redirect/link/popup user to $csr->user_setup_url
        # (openID 2) retry request in checkid_setup mode
   } elsif ($csr->user_cancel) {
        # restore web app state to prior to check_url
@@ -1099,9 +1099,16 @@ identity.  More information is available at:
 
 my $csr = Net::OpenID::Consumer->new([ %opts ]);
 
-You can set the C<ua>, C<cache>, C<consumer_secret>, C<required_root>,
-C<minimum_version> and C<args> in the constructor.  See the corresponding
-method descriptions below.
+You can set the
+C<ua>,
+C<cache>,
+C<args>,
+C<consumer_secret>,
+C<minimum_version>,
+C<required_root>,
+C<assoc_options>, and
+C<nonce_options>
+in the constructor.  See the corresponding method descriptions below.
 
 =back
 
@@ -1113,16 +1120,23 @@ method descriptions below.
 
 =item $csr->B<message>($key)
 
-Obtain a value from the message contained in the request arguments
-with the given key. This can only be used to obtain core arguments,
-not extension arguments.
+Returns the value for the given key/field from the OpenID protocol
+message contained in the request URL parameters (i.e., the value for
+the URL parameter C<openid.$key>).
+This can only be used to obtain core OpenID fields not extension fields.
 
-Call this method without a C<$key> argument to get a L<Net::OpenID::IndirectMessage>
-object representing the message.
+Calling this method without a C<$key> argument returns a
+L<Net::OpenID::IndirectMessage|Net::OpenID::IndirectMessage>
+object representing the protocol message.
+
+Returns undef in either case if no URL parameters have been supplied
+(i.e., because B<args>() has not been initialized) or if the request
+is not an actual OpenID message.
 
 =item $csr->B<err>
 
-Returns the last error, in form "errcode: errtext"
+Returns the last error, in form "errcode: errtext",
+as set by the various handlers below.
 
 =item $csr->B<errcode>
 
@@ -1146,10 +1160,11 @@ Returns the last error code/text in JSON format.
 
 =item $csr->B<ua>
 
-Getter/setter for the LWP::UserAgent (or subclass) instance which will
-be used when web donwloads are needed.  It's highly recommended that
-you use LWPx::ParanoidAgent, or at least read its documentation so
-you're aware of why you should care.
+Getter/setter for the L<LWP::UserAgent|LWP::UserAgent> (or subclass)
+instance which will be used when direct HTTP requests to a provider are needed.
+It's highly recommended that you use
+L<LWPx::ParanoidAgent|LWPx::ParanoidAgent>, or at least read its
+documentation so you're aware of why you should care.
 
 =item $csr->B<cache>($cache)
 
@@ -1160,17 +1175,17 @@ HTML or XRDS pages and keys for associations with identity providers.
 
 The $cache object can be anything that has a -E<gt>get($key) and
 -E<gt>set($key,$value[,$expire]) methods.  See L<URI::Fetch> for more
-information.  This cache object is passed to L<URI::Fetch> directly.
+information.  This cache object is passed to L<URI::Fetch|URI::Fetch> directly.
 
 Setting a cache instance is not absolutely required,
 But without it, provider associations will not be possible and
 the same pages may be fetched multiple times during discovery.
 
-=item $nos->B<consumer_secret>($scalar)
+=item $csr->B<consumer_secret>($scalar)
 
-=item $nos->B<consumer_secret>($code)
+=item $csr->B<consumer_secret>($code)
 
-=item $code = $nos->B<consumer_secret>; ($secret) = $code->($time);
+ $code = $csr->B<consumer_secret>; ($secret) = $code->($time);
 
 The consumer secret is used to generate self-signed nonces for the
 return_to URL, to prevent spoofing.
@@ -1208,25 +1223,48 @@ to make this behavior explicit.
 
 Can be used in 1 of 3 ways:
 
-1. Setting the way which the Consumer instances obtains GET parameters:
+=over
 
-$csr->args( $reference )
+=item 1.
 
-Where $reference is either a HASH ref, a CODE ref, or a "request object".
-Currently recognized request objects include Apache, Apache::Request,
-Apache2::Request, Plack::Request, and CGI.
+Set the object from which URL parameter names and values are to be retrieved:
 
-If you pass in a CODE ref, it must, if given a single URL parameter
-name argument, return that parameter value B<and>, if given no arguments
-at all, return the full list of parameter names from the request.
+ $csr->args( $reference )
 
-If you pass in an Apache (Apache 1 RequestRec) object, you must not
-have already called $r->content as the consumer module will want to
-get the request arguments out of here in the case of a POST request.
+where C<$reference> is either
+an unblessed C<HASH> ref,
+a C<CODE> ref, or
+some kind of "request object" E<mdash> the latter being either a
+L<CGI|..::CGI>,
+L<Apache|..::Apache>,
+L<Apache::Request|Apache::Request>,
+L<Apache2::Request|Apache2::Request>, or
+L<Plack::Request|Plack::Request> object.
 
-2. Get a parameter:
+If you pass in a C<CODE> ref, it must,
 
-my $foo = $csr->args("foo");
+=over
+
+=item *
+
+given a single parameter name argument, return the corresponding parameter value, I<and>,
+
+=item *
+
+given no arguments at all, return the full list of parameter names from the request.
+
+=back
+
+If you pass in an L<Apache|..::Apache> (mod_perl 1.x interface) object
+and this is a POST request, you must I<not> have already called
+C<< $r->content >> as this routine will be making said call
+itself in order to extract the request parameters.
+
+=item 2.
+
+Get a parameter value:
+
+ my $foo = $csr->args("foo");
 
 When given an unblessed scalar, it retrieves the value.  It croaks if
 you haven't defined a way to get at the parameters.
@@ -1234,60 +1272,67 @@ you haven't defined a way to get at the parameters.
 Most callers should instead use the C<message> method above, which
 abstracts away the need to understand OpenID's message serialization.
 
-3. Get the getter:
+=item 3.
 
-my $code = $csr->args;
+Get the parameter getter:
 
-Without arguments, returns a subref that returns the value given a
-parameter name.
+ my $code = $csr->args;
+
+this being a subref that takes a parameter name and
+returns the corresponding value.
 
 Most callers should instead use the C<message> method above with no
 arguments, which returns an object from which extension attributes
 can be obtained by their documented namespace URI.
 
-=item $nos->B<required_root>($url_prefix)
+=back
 
-=item $url_prefix = $nos->B<required_root>
+=item $csr->B<required_root>($url_prefix)
 
-If provided, this is the required string that all return_to URLs must
-start with.  If it doesn't match, it'll be considered invalid (spoofed
-from another site)
+=item $csr->B<required_root>
 
-=item $csr->assoc_options(...)
+Gets or sets the string prefix that, if nonempty, all return_to URLs
+must start with.  Messages with return_to URLS that don't match will
+be considered invalid (spoofed from another site).
 
-=item $csr->assoc_options
+=item $csr->B<assoc_options>(...)
+
+=item $csr->B<assoc_options>
 
 Get or sets the hash of parameters that determine how associations
-with identity providers will be made.  Available options include
+with identity providers will be made.  Available options include:
 
 =over 4
 
-=item assoc_type
+=item C<assoc_type>
 
 Association type, (default 'HMAC-SHA1')
 
-=item session_type
+=item C<session_type>
 
 Association session type, (default 'DH-SHA1')
 
-=item max_encrypt
+=item C<max_encrypt>
 
-(default FALSE) Use best encryption available for protocol version
+(boolean)
+Use best encryption available for protocol version
 for both session type and association type.
 This overrides C<session_type> and C<assoc_type>
 
-=item session_no_encrypt_https
+=item C<session_no_encrypt_https>
 
-(default FALSE) Use an unencrypted session type if the ID provider
-URL is https:.  This overrides C<max_encrypt> if both are set.
+(boolean)
+Use an unencrypted session type if the ID provider URL scheme is C<https:>.
+This overrides C<max_encrypt> if both are set.
 
-=item allow_eavesdropping
+=item C<allow_eavesdropping>
 
-(default FALSE)  Because it is generally a bad idea, we abort
-assocations where an unencrypted session over a non-SSL
-connection is called for.  However the OpenID 1.1 specification
-technically allows this, so if that is what you really want,
-set this flag true.  Ignored under protocol version 2.
+(boolean)
+Because it is generally a bad idea, we abort assocations where an
+unencrypted session over a non-SSL connection is called for.
+However the OpenID 1.1 specification technically allows this,
+so if that is what you really want, set this flag true.
+Ignored under protocol version 2.
 
 =back
 
@@ -1299,27 +1344,41 @@ set this flag true.  Ignored under protocol version 2.
 
 =item $csr->B<claimed_identity>($url)
 
-Given a user-entered $url (which could be missing http://, or have
-extra whitespace, etc), returns either a Net::OpenID::ClaimedIdentity
-object, or undef on failure.
+Given a user-entered $url
+(which could be missing http://, or have extra whitespace, etc),
+converts it to canonical form,
+performs partial discovery to confirm that at least one provider endpoint exists,
+and returns a L<Net::OpenID::ClaimedIdentity|Net::OpenID::ClaimedIdentity>
+object, or, on failure of any of the above,
+returns undef and sets last error ($csr->B<err>).
 
-Note that this identity is NOT verified yet.  It's only who the user
-claims they are, but they could be lying.
+Note that the identity returned is I<not> verified yet.
+It's only who the user claims they are, but they could be lying.
 
-If this method returns undef, you can rely on the following errors
+If this method returns undef, you can rely on the following error
 codes (from $csr->B<errcode>) to decide what to present to the user:
 
 =over 8
 
-=item no_identity_server
+=item C<no_identity_server>
 
-=item empty_url
+No identity provider was found for this URL.
 
-=item bogus_url
+=item C<protocol_version_incorrect>
 
-=item no_head_tag
+You set B<minimum_version(2)> and all of the available providers are version 1.
 
-=item url_fetch_err
+=item C<empty_url>
+
+The URL provided was essentially an empty string.
+
+=item C<bogus_url>
+
+The URL provided was of the wrong scheme (not C<http:> or C<https:>).
+
+=item C<url_fetch_err, no_head_tag>
+
+No longer used.
 
 =back
 
@@ -1347,31 +1406,50 @@ something different in each case.
 
 The available callbacks are:
 
-=over 8
+=over
 
-=item B<not_openid> - the request isn't an OpenID response after all.
+=item C<not_openid>
 
-=item B<setup_needed>() - a checkid_immediate mode request was rejected, indicating that the provider requires user interaction.
+the request isn't an OpenID response after all.
 
-=item B<cancelled> - the user cancelled the authentication request from the provider's UI.
+=item C<setup_needed>
 
-=item B<verified>($verified_identity) - the user's identity has been successfully verified. A L<Net::OpenID::VerifiedIdentity> object is passed in.
+a checkid_immediate mode request was rejected, indicating that the provider requires user interaction.
 
-=item B<error>($errcode, $errmsg) - an error has occured. An error code and message are provided.
+=item C<cancelled>
+
+the user cancelled the authentication request from the provider's UI.
+
+=item C<verified ($verified_identity)>
+
+the user's identity has been successfully verified.
+A L<Net::OpenID::VerifiedIdentity|Net::OpenID::VerifiedIdentity> object is passed in.
+
+=item C<error ($errcode, $errmsg)>
+
+an error has occured. An error code and message are provided.
 
 =back
 
 For the sake of legacy code we also allow
 
-=over 8
+=over
 
-=item B<setup_required>($setup_url) - [DEPRECATED] a checkid_immediate mode request was rejected AND $setup_url was provided.
+=item C<setup_required ($setup_url)>
+
+B<[DEPRECATED]> a checkid_immediate mode request was rejected
+I<and> $setup_url was provided.
+
+Clients using this callback should be updated to use B<setup_needed>
+at the earliest opportunity.  Here $setup_url is the same as returned by
+$csr->B<user_setup_url>.
 
 =back
 
-however clients using this callback should be updated to use B<setup_needed>
-at the earliest opportunity.  Here $setup_url is the same as returned by
-B<user_setup_url>.
+=item $csr->B<is_server_response>
+
+Returns true if a set of URL parameters has been supplied (via $csr->B<args>)
+and constitutes an actual OpenID protocol message.
 
 =item $csr->B<setup_needed>
 
@@ -1410,7 +1488,7 @@ under OpenID 2.0.  Use C<setup_needed()> instead.
 
 =back
 
-The base URL this this function returns can be modified by using the
+The base URL that this function returns can be modified by using the
 following options in %opts:
 
 =over
@@ -1439,7 +1517,8 @@ parameters that you'd sent along in your return_to URL.
 
 =item $csr->B<verified_identity>( [ %opts ] )
 
-Returns a Net::OpenID::VerifiedIdentity object, or undef.
+Returns a Net::OpenID::VerifiedIdentity object,
+or returns undef and sets last error ($csr->B<err>).
 Verification includes double-checking the reported identity URL
 declares the identity provider, verifying the signature, etc.
 
@@ -1484,7 +1563,7 @@ L<Net::OpenID::ClaimedIdentity> -- part of this module
 
 L<Net::OpenID::VerifiedIdentity> -- part of this module
 
-L<Net::OpenID::Server> -- another module, for acting like an OpenID server
+L<Net::OpenID::Server> -- another module, for implementing an OpenID identity provider/server
 
 =head1 AUTHORS
 
