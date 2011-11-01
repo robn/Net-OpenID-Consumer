@@ -1107,6 +1107,8 @@ method descriptions below.
 
 =head1 METHODS
 
+=head2 State
+
 =over 4
 
 =item $csr->B<message>($key)
@@ -1133,6 +1135,12 @@ Returns the last error text.
 =item $csr->B<json_err>
 
 Returns the last error code/text in JSON format.
+
+=back
+
+=head2 Configuration
+
+=over 4
 
 =item $csr->B<ua>($user_agent)
 
@@ -1283,6 +1291,12 @@ set this flag true.  Ignored under protocol version 2.
 
 =back
 
+=back
+
+=head2 Performing Discovery
+
+=over
+
 =item $csr->B<claimed_identity>($url)
 
 Given a user-entered $url (which could be missing http://, or have
@@ -1308,6 +1322,16 @@ codes (from $csr->B<errcode>) to decide what to present to the user:
 =item url_fetch_err
 
 =back
+
+=back
+
+=head2 Handling Provider Responses
+
+The following routines are for handling a redirected provider response
+and assume that, among other things, $csr->B<args> has been properly
+populated with the URL parameters.
+
+=over
 
 =item $csr->B<handle_server_response>( %callbacks );
 
