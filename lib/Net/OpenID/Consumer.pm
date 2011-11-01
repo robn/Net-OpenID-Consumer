@@ -1194,13 +1194,18 @@ In the simplest (and least secure) form, you configure a static secret
 value with a scalar.  If you use this method and change the scalar
 value, any outstanding requests from the last 30 seconds or so will fail.
 
-The more robust (but more complicated) form is to supply a subref that
-returns a secret based on the provided I<$time>, a unix timestamp.
-And if one doesn't exist for that time, create, store and return it
-(with appropriate locking so you never return different secrets for
-the same time.)
+You may also supply a subref that takes one argument, I<$time>,
+a unix timestamp and returns a secret.
 
 Your secret may not exceed 255 characters.
+
+For the best protection against replays and login cross-site request
+forgery, consumer_secret should additionally depend on something known
+to be specific to the client browser instance and not visible to an
+attacker.  If C<SSH_SESSION_ID> is available, you should use that.
+Otherwise you'll need to set a (Secure) cookie on the (HTTPS) page
+where the signin form appears in order to establish a pre-login
+session, then make sure to change this cookie upon successful login.
 
 =item $csr->B<minimum_version>(2)
 
