@@ -1,5 +1,85 @@
 {{$NEXT}}
 
+1.100099_002 Nov 02 2011
+
+    * we now do actual checking of responce_nonce (closes #44767)
+
+    * lots of POD fixes
+
+1.100099_001 Oct 25 2011
+
+  ---------------
+  ==> API CHANGE:  Consumer->args(CODEREF)
+
+      CODEREF now needs to be able to also take zero arguments and
+      return a list of all URL parameters in the request.
+
+      No change is needed for the other argument types
+      (i.e., unblessed hash or CGI/Apache/etc request object)
+
+      (Enumeration is required for check_authentication in OpenID 2.0
+      to work properly -- if the list isn't available then we can revert
+      to OpenID 1.1 behavior of only sending the signed parameters and
+      hope for the best, but be warned that some providers may reject
+      this.)
+
+  ---------------
+
+    * HTML parsing routines now reside in Net::OpenID::Common (1.12
+      required) which has itself been upgraded to using HTML::Parser.
+
+1.030099_006 Oct 22 2011
+
+  ---------------
+  ==> API CHANGE:  Consumer->handle_server_response()
+
+      The 'setup_required' callback is now DEPRECATED but still
+      recognized for now for the sake of legacy code.  It may be
+      removed in a future release.
+
+      Use 'setup_needed' instead.  This callback
+        (1) is invoked in ALL cases where a checkid_immediate mode
+            request fails, including those where user_setup_url
+            is not supplied, and
+        (2) is NOT supplied a user_setup_url parameter
+            (you can still use Consumer->user_setup_url as needed)
+
+      Note that in OpenID 2.0, the correct way to handle failure of a
+      checkid_immediate mode request is to retry the same request
+      again in checkid_setup mode.  user_setup_url is generally not
+      meaningful in OpenID 2.0 and therefore CANNOT be relied upon.
+
+  ---------------
+  ==> API CHANGE:  Consumer->setup_needed()  [new function]
+
+      Should be used to test for the failed checkid_immediate case
+      when not using handle_server_response().
+
+      Testing for user_setup_url() having been set is DEPRECATED and
+      will NOT work under OpenID 2.0 since user_setup_url is generally
+      not meaningful in 2.0 (even if some 2.0 providers do in fact
+      supply it).
+
+  ---------------
+
+    * Handle 2.0 provider-specific 'error' mode responses.
+      These currently show up in the 'error' callback 
+      (errcode == 'provider_error');
+
+    * Remove dependency in ordering of minimum_version() and args()
+      setters.  This was a bug that prevented minimum_version from being
+      recognized at all.
+
+    * Fix handle_server_response unknown callback error message -- close #58368
+
+    * Handle version 2.0 associations and all session/association types.
+      This is customizable using Consumer->assoc_options.
+
+    * Fix bug in handling of sreg extension under 2.0
+      that prevented certain other extensions from being recognized.
+
+    * New co-maintainer (Roger Crew)
+
 1.030099_005 Jan 01 2011
 
     * Remove calls to util::ejs and util::eurl; use JSON and URI::Escape
@@ -8,16 +88,16 @@
 1.030099_004 Dec 18 2010
 
     * Added example CGI program (Robert Norris)
-    
+
     * Added missing error messages (Mario Domgoergen)
 
 1.030099_003 Nov 09 2010
 
     * Add namespace to check_authentication signature verification calls to
       fix stateless mode against strict OPs (Robert Norris)
-      
+
     * Documentation tweaks (Robert Norris)
- 
+
 1.030099_002 Nov 07 2010
 
     * Fixed a call to OpenID::util::hmac_sha1_hex which no longer exists
@@ -30,25 +110,25 @@
     * Fix potential timing attack when checking signatures (Adam Sjøgren)
       (see http://lists.openid.net/pipermail/openid-security/2010-July/001156.html)
 
-	* Set sreg namespace based on what the server is expecting
+        * Set sreg namespace based on what the server is expecting
       (Adam Sjøgren)
 
-	* Moved some utility bits out to a separate Net::OpenID::Common
-	  package so that Net::OpenID::Server can use it in future
-	  versions.
+        * Moved some utility bits out to a separate Net::OpenID::Common
+          package so that Net::OpenID::Server can use it in future
+          versions.
 
 1.03:
 
         * Enforce the rules from the Auth 2.0 spec about which fields
           MUST be signed in positive assertion messages.
 
-	* Return a more sensible error (no_head_tag) if the identifier
-	  URL returns an empty (0-byte) HTML document.
+        * Return a more sensible error (no_head_tag) if the identifier
+          URL returns an empty (0-byte) HTML document.
 
-	* Verify delegate on the non-fragment version of the resulting
-	  identifier, so that you can delegate to providers that add
-	  fragments to their identifiers.
-	  Found and fixed by avarix <mindsectr@gmail.com>.
+        * Verify delegate on the non-fragment version of the resulting
+          identifier, so that you can delegate to providers that add
+          fragments to their identifiers.
+          Found and fixed by avarix <mindsectr@gmail.com>.
 
 1.02:
 
@@ -106,97 +186,97 @@
 
 0.13:
         * work-around bug in some openid servers that don't escape "+".
-	  so treat a space as a +.  (from Thomas Sibley
-	  <trs@bestpractical.com>)
+          so treat a space as a +.  (from Thomas Sibley
+          <trs@bestpractical.com>)
 
         * go into dumb mode earlier if it's detected that our cache object
-	  isn't working
+          isn't working
 
-	* give callers access to the signed_fields from the verified
-	  identity object
+        * give callers access to the signed_fields from the verified
+          identity object
 
 0.12:
-	* required_root in constructor/method/validated_identity
+        * required_root in constructor/method/validated_identity
 
-	* allow https identities
+        * allow https identities
 
-	* version 1.1 of the protocol
+        * version 1.1 of the protocol
 
-	* expand entities in link rel
+        * expand entities in link rel
 
-	* reject cached association validation if expiry is in past
+        * reject cached association validation if expiry is in past
 
 0.11:
-	* document common error codes from claimed_identity, and
-	  cleanup some error handling/codes
+        * document common error codes from claimed_identity, and
+          cleanup some error handling/codes
 
-	* support openid.mode=cancel
+        * support openid.mode=cancel
 
-	* respect replace_after and expiry.  do clock compensation
-	  between local clock and server.
+        * respect replace_after and expiry.  do clock compensation
+          between local clock and server.
 
-	* invalidate_handle support
+        * invalidate_handle support
 
 0.10:
         * handle openid.delegate properly (was losing state because I'd
-	  put a URL parameter onto the wrong URL)
+          put a URL parameter onto the wrong URL)
 
-	* copy all signed parameters into POST args in dumb mode,
-	  not a static set (to be future-proof)
+        * copy all signed parameters into POST args in dumb mode,
+          not a static set (to be future-proof)
 
 0.09:
         * switch to DH/HMAC protocol, not DSA protocol
 
 0.08:
-	* more openssl-binary temp file changes.  on second failure (which
-	  was previously missing a new method), it also propogates up the
-	  error message now, instead of dying, to be more consistent with
-	  the other DSA checkers, which never die
+        * more openssl-binary temp file changes.  on second failure (which
+          was previously missing a new method), it also propogates up the
+          error message now, instead of dying, to be more consistent with
+          the other DSA checkers, which never die
 
 0.07:
-	* bugfix: use URI::Fetch 0.02, not "0.02" in quotes
+        * bugfix: use URI::Fetch 0.02, not "0.02" in quotes
 
-	* bugfix: don't set cache if no cache
+        * bugfix: don't set cache if no cache
 
 0.06:
-	* wrap Crypt::OpenSSL::DSA verify in eval {} as it can croak
+        * wrap Crypt::OpenSSL::DSA verify in eval {} as it can croak
 
-	* use URI::Fetch, which does caching and proper HTTP behavior
+        * use URI::Fetch, which does caching and proper HTTP behavior
 
-	* let user get/set cache, which is then propogated down to URI::Fetch
+        * let user get/set cache, which is then propogated down to URI::Fetch
 
-	* optionally use new pure-perl version of Crypt::DSA which now
-	  does ASN.1 serialization/deserialization in both signatures and
-	  public keys.  brings total options of DSA verify techniques up
-	  to 3.
+        * optionally use new pure-perl version of Crypt::DSA which now
+          does ASN.1 serialization/deserialization in both signatures and
+          public keys.  brings total options of DSA verify techniques up
+          to 3.
 
-	* tmpdir option (and smart auto-configuration) for people using
-  	  OpenSSL binaries to verify signatures.
+        * tmpdir option (and smart auto-configuration) for people using
+          OpenSSL binaries to verify signatures.
 
-	* security fix when doing DSA checks with system openssl binary
-	  (was previously parsing the wrong status)
+        * security fix when doing DSA checks with system openssl binary
+          (was previously parsing the wrong status)
 
-	* misc reported bugfixes
+        * misc reported bugfixes
 
 0.05:
         * stupid push_url_arg bugfix
 
-	* doc fix in example code (no post_grant in check_url)
+        * doc fix in example code (no post_grant in check_url)
 
 0.04:
         * tons more docs:  in both ClaimedIdentity and VerifiedIdentity
 
-	* Consumer now observes atom/rss/foaf/foafmaker at the same time
-	  as openid.server, and passes it along to VerifiedIdentity,
-	  where it's accessible, and VerifiedIdentity knows whether or
-	  not those urls are under the trusted one or not, and makes them
-	  differently available to callers
+        * Consumer now observes atom/rss/foaf/foafmaker at the same time
+          as openid.server, and passes it along to VerifiedIdentity,
+          where it's accessible, and VerifiedIdentity knows whether or
+          not those urls are under the trusted one or not, and makes them
+          differently available to callers
 
-	* bug fixes, doc fixes
+        * bug fixes, doc fixes
 
-	* post_grant moved to user_setup_url, not check_url
+        * post_grant moved to user_setup_url, not check_url
 
-	* delayed_return added to check_url
+        * delayed_return added to check_url
 
 0.03:
         * setting args in constructor was broken
@@ -204,41 +284,41 @@
         * renamed get_claimed_identity to just claimed_identity to be
           consistent
 
-	* all methods now croak if called with too many arguments
+        * all methods now croak if called with too many arguments
 
-	* added ClaimedIdentity->identity_server to get just one,
-	  as selected by plugin, instead of array of them all
+        * added ClaimedIdentity->identity_server to get just one,
+          as selected by plugin, instead of array of them all
 
 0.02:
-	* POD docs for Net/OpenID/Consumer.pm
+        * POD docs for Net/OpenID/Consumer.pm
 
-	* accepts CGI, Apache, Apache::Request, and CODE arguments now for
-	GET argument retrievers, in addition to just HASH references
+        * accepts CGI, Apache, Apache::Request, and CODE arguments now for
+        GET argument retrievers, in addition to just HASH references
 
-	* openid.server auto-discovery only happens within first <head> tag
+        * openid.server auto-discovery only happens within first <head> tag
 
-	* if using Crypt::OpenSSL::DSA, now requires 0.12 due to bugs found
-	  in 0.11.
+        * if using Crypt::OpenSSL::DSA, now requires 0.12 due to bugs found
+          in 0.11.
 
-	* DSA verification using OpenSSL binary no longer spews "Verification OK"
-	  to stdout
+        * DSA verification using OpenSSL binary no longer spews "Verification OK"
+          to stdout
 
 0.01:
-	* fetching of page (with configurable user agent object; I
-	  recommend you use LWPx::ParanoidAgent, now available on CPAN)
-	  and returning a "ClaimedIdentity" object of what the user claims
-	  they are, but is not verified yet
+        * fetching of page (with configurable user agent object; I
+          recommend you use LWPx::ParanoidAgent, now available on CPAN)
+          and returning a "ClaimedIdentity" object of what the user claims
+          they are, but is not verified yet
 
-	* auto-discovery of openid servers
+        * auto-discovery of openid servers
 
-	* hook to let you provide your subref to do openid server
-	  selection, given multiple options
+        * hook to let you provide your subref to do openid server
+          selection, given multiple options
 
         * generation of "check" URL to send user to to get redirect
 
-	* reading of response parameters, returning either a
-	  user_setup_url or a VerifiedIdentity object (doing DSA
-	  validation with either Crypt::OpenSSL::DSA or your openssl
-	  binary)
+        * reading of response parameters, returning either a
+          user_setup_url or a VerifiedIdentity object (doing DSA
+          validation with either Crypt::OpenSSL::DSA or your openssl
+          binary)
 
-	 * start of JSON responses for javascript UI
+         * start of JSON responses for javascript UI

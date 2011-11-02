@@ -5,9 +5,9 @@ use Carp ();
 package Net::OpenID::ClaimedIdentity;
 use fields (
     'identity',         # the canonical URL that was found, following redirects
-    'server',           # author-identity identity server endpoint
+    'server',           # author-identity identity provider endpoint
     'consumer',         # ref up to the Net::OpenID::Consumer which generated us
-    'delegate',         # the delegated URL actually asserted by the server
+    'delegate',         # the delegated URL actually asserted by the provider
     'protocol_version', # The version of the OpenID Authentication Protocol that is used
     'semantic_info',    # Stuff that we've discovered in the identifier page's metadata
     'extension_args',   # Extension arguments that the caller wants to add to the request
@@ -108,6 +108,7 @@ sub check_url {
         $assoc = Net::OpenID::Association::handle_assoc($csr, $ident_server, $use_assoc_handle);
     } else {
         $assoc = Net::OpenID::Association::server_assoc($csr, $ident_server, $force_reassociate, (
+            %{$csr->assoc_options},
             protocol_version => $self->protocol_version,
         ));
     }
@@ -175,19 +176,18 @@ sub check_url {
     foreach my $ext_uri (keys %{$self->{extension_args}}) {
         my $ext_alias;
 
-        my $version=$self->protocol_version;
-        $version=$1 if $ext_uri=~m!/(\d+(:?[.]\d+))$!;
-        if ($version >= 2) {
-            $ext_alias = 'e'.($ext_idx++);
-            $ext_url_args{'openid.ns.'.$ext_alias} = $ext_uri;
-        }
-        else {
+        if ($ext_uri eq "http://openid.net/extensions/sreg/1.1") {
             # For OpenID 1.1 only the "SREG" extension is allowed,
             # and it must use the "openid.sreg." prefix.
-            next unless $ext_uri eq "http://openid.net/extensions/sreg/1.1";
             $ext_alias = "sreg";
-            $ext_url_args{'openid.ns.sreg'}=$ext_uri;
         }
+        elsif ($self->protocol_version < 2) {
+            next;
+        }
+        else {
+            $ext_alias = 'e'.($ext_idx++);
+        }
+        $ext_url_args{'openid.ns.'.$ext_alias} = $ext_uri;
 
         foreach my $k (keys %{$self->{extension_args}{$ext_uri}}) {
             $ext_url_args{'openid.'.$ext_alias.'.'.$k} = $self->{extension_args}{$ext_uri}{$k};
@@ -251,13 +251,13 @@ check_url, though.
 
 =item $id_server = $cident->B<identity_server>
 
-Returns the identity server that will assert whether or not this
+Returns the identity provider that will assert whether or not this
 claimed identity is valid, and sign a message saying so.
 
 =item $url = $cident->B<delegated_url>
 
 If the claimed URL is using delegation, this returns the delegated identity that will
-actually be sent to the identity server.
+actually be sent to the identity provider.
 
 =item $version = $cident->B<protocol_version>
 
@@ -295,10 +295,11 @@ validate their identity.  The options to put in %opts are:
 
 =item C<return_to>
 
-The URL that the identity server should redirect the user with either
-a verified identity signature -or- a user_setup_url (if the assertion
-couldn't be made).  This URL may contain query parameters, and the
-identity server must preserve them.
+The URL that the identity provider should redirect the user with
+either a verified identity signature -or- a setup_needed message
+(indicating actual interaction with the user is required before an
+assertion can be made).  This URL may contain query parameters, and
+the identity provider must preserve them.
 
 =item C<trust_root>
 
@@ -312,18 +313,19 @@ beginning of the host, like C<http://*.example.com/>
 =item C<delayed_return>
 
 If set to a true value, the check_url returned will indicate to the
-user's identity server that it has permission to control the user's
+user's identity provider that it has permission to control the user's
 user-agent for awhile, giving them real pages (not just redirects) and
-lets them bounce around the identity server site for awhile until
+lets them bounce around the identity provider site for awhile until
 the requested assertion can be made, and they can finally be redirected
 back to your return_to URL above.
 
-The default value, false, means that the identity server will
+The default value, false, means that the identity provider will
 immediately return to your return_to URL with either a "yes" or "no"
 answer.  In the "no" case, you'll instead have control of what to do,
-and you'll be sent the identity server's user_setup_url where you'll
-have to somehow send the user (be it link, redirect, or pop-up
-window).
+whether to retry the request with C<delayed_return> set true 
+(the only way to proceed in version 2.0) or to somehow send 
+(be it link, redirect, or pop-up window) the user the provider's
+user_setup_url (which is made available in version 1.0/1.1).
 
 When writing a dynamic "AJAX"-style application, you can't use
 delayed_return because the remote site can't usefully take control of

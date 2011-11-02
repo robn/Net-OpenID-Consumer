@@ -359,7 +359,7 @@ FOAF XML documents that were also found in their HTML's E<lt>headE<gt>
 section.  The short versions will only return a URL if they're below
 the root URL that was verified.  If you want to get at the user's
 declared rss/atom/foaf, even if it's on a different host or parent
-directory, use the delcared_* versions, which don't have the additional
+directory, use the declared_* versions, which don't have the additional
 checks.
 
 2005-05-24:  A future module will take a Net::OpenID::VerifiedIdentity
