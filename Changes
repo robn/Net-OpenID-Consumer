@@ -2,6 +2,10 @@
 
 1.100099_002 Nov 02 2011
 
+    * we now do actual checking of responce_nonce (closes #44767)
+
+    * lots of POD fixes
+
 1.100099_001 Oct 25 2011
 
   ---------------
